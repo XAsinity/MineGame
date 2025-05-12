@@ -1,16 +1,37 @@
 local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
 
 local ItemSpawner = {}
 
--- Helper: Generate a unique chest ID
-function ItemSpawner.generateUniqueChestID(player)
-	local inventory = player and player:FindFirstChild("Inventory")
-	if not inventory then return math.random(1, 1e9) end
+-- A DataStore to track all globally assigned UniqueIDs
+local uniqueIDStore = DataStoreService:GetDataStore("UniqueIDStore")
 
+-- Helper: Generate a globally unique chest ID
+function ItemSpawner.generateUniqueChestID(player)
 	local uniqueID
 	repeat
-		uniqueID = math.random(1, 1e9)
-	until not inventory:FindFirstChild("Chest_" .. uniqueID)
+		-- Use a combination of JobId, timestamp, and random number
+		local jobId = game.JobId or "UnknownJob" -- Unique ID for the server
+		local timestamp = os.time() -- Current time in seconds
+		local randomPart = math.random(1, 1e9) -- Random component
+		uniqueID = tostring(jobId) .. "-" .. tostring(timestamp) .. "-" .. tostring(randomPart)
+
+		-- Check with the DataStore if the ID is already used
+		local success, exists = pcall(function()
+			return uniqueIDStore:GetAsync(uniqueID)
+		end)
+		if not success then
+			warn("Error checking UniqueID in DataStore:", exists)
+		end
+	until not exists
+
+	-- Save the new UniqueID to the DataStore
+	local success, err = pcall(function()
+		uniqueIDStore:SetAsync(uniqueID, true)
+	end)
+	if not success then
+		warn("Error saving UniqueID to DataStore:", err)
+	end
 
 	return uniqueID
 end
@@ -51,14 +72,16 @@ function ItemSpawner.spawnOre(oreType, position, oresFolder)
 	return ore
 end
 
+-- Function to spawn a chest with a globally unique ID
 function ItemSpawner.spawnChest(chestTemplate, position, chestsFolder, player)
 	local chest = chestTemplate:Clone()
 	chest.Position = position
 	chest.Anchored = true
 	chest.Parent = chestsFolder
 
+	-- Generate and assign a globally unique ID to the chest
 	local uniqueID = ItemSpawner.generateUniqueChestID(player)
-	local chestIDValue = Instance.new("IntValue")
+	local chestIDValue = Instance.new("StringValue") -- Use StringValue for alphanumeric IDs
 	chestIDValue.Name = "UniqueID"
 	chestIDValue.Value = uniqueID
 	chestIDValue.Parent = chest
