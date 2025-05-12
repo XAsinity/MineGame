@@ -11,17 +11,17 @@ local playerDataStore = DataStoreService:GetDataStore("PlayerDataStore")
 local chestTemplate = ReplicatedStorage:WaitForChild("Chest")
 
 -- Generate a unique chest ID
-local function generateUniqueChestID(player)
-	local inventory = player:FindFirstChild("Inventory")
-	if not inventory then return math.random(1, 1e9) end
+--local function generateUniqueChestID(player)
+--	local inventory = player:FindFirstChild("Inventory")
+--	if not inventory then return math.random(1, 1e9) end
 
-	local uniqueID
-	repeat
-		uniqueID = math.random(1, 1e9) -- Generate a random number between 1 and 1 billion
-	until not inventory:FindFirstChild("Chest_" .. uniqueID) -- Ensure the ID is unique
+--	local uniqueID
+--	repeat
+--		uniqueID = math.random(1, 1e9) -- Generate a random number between 1 and 1 billion
+--	until not inventory:FindFirstChild("Chest_" .. uniqueID) -- Ensure the ID is unique
 
-	return uniqueID
-end
+--	return uniqueID
+--end
 
 -- Function to handle item collection (shared logic for ores and chests)
 -- Function to handle item collection (shared logic for ores and chests)

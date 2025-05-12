@@ -1,35 +1,31 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-
--- Require the centralized OreDefinitions module
 local OreDefinitions = require(ReplicatedStorage:WaitForChild("OreDefinitions"))
-
--- Use the validOres table from OreDefinitions
 local validOres = OreDefinitions.validOres
 
+local showSellBubbleEvent = ReplicatedStorage:FindFirstChild("ShowSellBubbleEvent")
+showSellBubbleEvent.Name = "ShowSellBubbleEvent"
+showSellBubbleEvent.Parent = ReplicatedStorage
+
 local function sellOres(player)
-	-- Access the player's inventory
 	local inventory = player:FindFirstChild("Inventory")
 	if not inventory then
 		warn("No inventory found for player:", player.Name)
+		showSellBubbleEvent:FireClient(player, 0)
 		return
 	end
 
 	local totalCoins = 0
 
-	-- Iterate through the inventory and sell ores
 	for _, oreItem in ipairs(inventory:GetChildren()) do
 		if validOres[oreItem.Name] then
-			local oreValue = oreItem.Value -- Amount of ore
-			local orePrice = 10 -- Set a base price for each ore, or fetch it dynamically
+			local oreValue = oreItem.Value
+			local orePrice = 10
 			totalCoins += oreValue * orePrice
-			oreItem.Value = 0 -- Reset the ore count after selling
-
-			print("[Sell] Selling " .. oreValue .. " of " .. oreItem.Name .. " for " .. (oreValue * orePrice) .. " coins.")
+			oreItem.Value = 0
 		end
 	end
 
-	-- Update the player's coins
 	local dataFolder = player:FindFirstChild("Data")
 	if dataFolder then
 		local coins = dataFolder:FindFirstChild("Coins")
@@ -38,9 +34,11 @@ local function sellOres(player)
 		end
 	end
 
+	-- Always fire the bubble event, even if nothing was sold!
+	showSellBubbleEvent:FireClient(player, totalCoins)
+
 	print("[Sell] " .. player.Name .. " sold all ores for " .. totalCoins .. " coins.")
 end
 
--- Listen for a remote event to sell ores
 local sellOreEvent = ReplicatedStorage:WaitForChild("SellOreEvent")
 sellOreEvent.OnServerEvent:Connect(sellOres)

@@ -61,9 +61,8 @@ function InventoryModule.handleItemTouched(item, player, validOres)
 		return
 	end
 
-	-- Prevent duplicate processing by marking the item as collected
 	if item:FindFirstChild("Collected") then
-		return -- Exit early if the item has already been processed
+		return
 	end
 
 	local collectedFlag = Instance.new("BoolValue")
@@ -75,7 +74,6 @@ function InventoryModule.handleItemTouched(item, player, validOres)
 		local uniqueID = item.UniqueID.Value
 		local chestName = "Chest_" .. uniqueID
 
-		-- Add the chest to the inventory
 		local chestItem = inventory:FindFirstChild(chestName)
 		if chestItem then
 			chestItem.Value += 1
@@ -88,10 +86,8 @@ function InventoryModule.handleItemTouched(item, player, validOres)
 			print("Added new chest to Inventory: " .. chestName)
 		end
 
-		-- Synchronize with Data folder
 		InventoryModule.syncInventoryWithData(player)
 
-		-- Destroy the chest after collection
 		item:Destroy()
 		print(player.Name .. " collected chest with ID:", uniqueID)
 		return
@@ -108,15 +104,76 @@ function InventoryModule.handleItemTouched(item, player, validOres)
 			warn("Ore type not found in Inventory: " .. oreName)
 		end
 
-		-- Synchronize with Data folder
 		InventoryModule.syncInventoryWithData(player)
 
-		-- Destroy the ore after collection
 		item:Destroy()
 		print(player.Name .. " collected: " .. oreName)
 	else
 		warn("Unhandled item type:", item.Name)
 	end
+end
+
+function InventoryModule.grantPickaxeToPlayer(player, pickaxeDef)
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local backpack = player:FindFirstChild("Backpack")
+	if not backpack then
+		warn("Player's Backpack not found!")
+		return
+	end
+
+	-- CLONE the Starter Pickaxe, don't create from scratch!
+	local starterTemplate = ReplicatedStorage:FindFirstChild("Starter Pickaxe")
+	if not starterTemplate then
+		warn("Starter Pickaxe template not found in ReplicatedStorage!")
+		return
+	end
+
+	local tool = starterTemplate:Clone()
+	tool.Name = pickaxeDef.Name .. " (" .. pickaxeDef.Rarity .. ")"
+
+	-- Set MiningSize in the Handle for mining logic
+	local handle = tool:FindFirstChild("Handle")
+	if handle then
+		local miningSizeValue = handle:FindFirstChild("MiningSize")
+		if miningSizeValue and miningSizeValue:IsA("IntValue") then
+			miningSizeValue.Value = pickaxeDef.MiningSize
+		else
+			-- If not present, create it
+			miningSizeValue = Instance.new("IntValue")
+			miningSizeValue.Name = "MiningSize"
+			miningSizeValue.Value = pickaxeDef.MiningSize
+			miningSizeValue.Parent = handle
+		end
+	else
+		warn("Handle missing in cloned tool!")
+	end
+
+	-- Add Rarity for reference
+	local rarityValue = tool:FindFirstChild("Rarity")
+	if not rarityValue then
+		rarityValue = Instance.new("StringValue")
+		rarityValue.Name = "Rarity"
+		rarityValue.Parent = tool
+	end
+	rarityValue.Value = pickaxeDef.Rarity
+
+	tool.Parent = backpack
+
+	-- Store a record in Inventory folder for UI/statistics
+	local inventory = player:FindFirstChild("Inventory")
+	if inventory then
+		local toolItem = inventory:FindFirstChild(tool.Name)
+		if toolItem then
+			toolItem.Value = toolItem.Value + 1
+		else
+			toolItem = Instance.new("IntValue")
+			toolItem.Name = tool.Name
+			toolItem.Value = 1
+			toolItem.Parent = inventory
+		end
+	end
+
+	print("Granted pickaxe to player: " .. tool.Name)
 end
 
 return InventoryModule
