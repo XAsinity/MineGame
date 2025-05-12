@@ -1,21 +1,39 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Debug function to print the structure of the player's inventory
-local function debugInventory(player)
-	local backpack = player:FindFirstChild("Backpack")
-	if backpack then
-		print("Player's inventory:")
-		for _, tool in pairs(backpack:GetChildren()) do
-			if tool:IsA("Tool") then
-				print("Tool:", tool.Name)
-				for _, child in pairs(tool:GetDescendants()) do
-					print("  Child:", child.Name, "Class:", child.ClassName)
-				end
+-- Debug function to print the structure of the player's pickaxe inventory
+local function debugPickaxeInventory(player)
+	local pickaxeFolder = player:FindFirstChild("Data") and player.Data:FindFirstChild("Pickaxe")
+	if pickaxeFolder then
+		print("Player's pickaxe inventory:")
+		for _, pickaxe in pairs(pickaxeFolder:GetChildren()) do
+			print("Pickaxe:", pickaxe.Name)
+			for _, child in pairs(pickaxe:GetDescendants()) do
+				print("  Child:", child.Name, "Class:", child.ClassName)
 			end
 		end
 	else
-		warn("Backpack not found for player:", player.Name)
+		warn("Pickaxe folder not found for player:", player.Name)
+	end
+end
+
+-- Function to initialize the player's Data folder and Pickaxe folder
+local function initializePlayerData(player)
+	-- Ensure Data folder exists
+	local dataFolder = player:FindFirstChild("Data")
+	if not dataFolder then
+		dataFolder = Instance.new("Folder")
+		dataFolder.Name = "Data"
+		dataFolder.Parent = player
+	end
+
+	-- Ensure Pickaxe folder exists
+	local pickaxeFolder = dataFolder:FindFirstChild("Pickaxe")
+	if not pickaxeFolder then
+		pickaxeFolder = Instance.new("Folder")
+		pickaxeFolder.Name = "Pickaxe"
+		pickaxeFolder.Parent = dataFolder
+		print("Pickaxe folder created for player:", player.Name)
 	end
 end
 
@@ -52,20 +70,23 @@ local function giveStarterPickaxe(player)
 		warn("Handle missing in cloned Starter Pickaxe!")
 	end
 
-	-- Add the pickaxe to the player's inventory
-	local backpack = player:FindFirstChild("Backpack")
-	if backpack then
-		newPickaxe.Parent = backpack
+	-- Add the pickaxe to the player's pickaxe inventory
+	local pickaxeFolder = player:FindFirstChild("Data") and player.Data:FindFirstChild("Pickaxe")
+	if pickaxeFolder then
+		newPickaxe.Parent = pickaxeFolder
 		print("Starter Pickaxe given to player:", player.Name)
-		-- Debug the player's inventory after adding the pickaxe
-		debugInventory(player)
+		-- Debug the player's pickaxe inventory after adding the pickaxe
+		debugPickaxeInventory(player)
 	else
-		warn("Backpack not found for player:", player.Name)
+		warn("Pickaxe folder not found for player:", player.Name)
 	end
 end
 
 -- When a player joins the game
 Players.PlayerAdded:Connect(function(player)
+	-- Initialize player Data and Pickaxe folder
+	initializePlayerData(player)
+
 	player.CharacterAdded:Connect(function()
 		-- Give the player a starter pickaxe
 		giveStarterPickaxe(player)

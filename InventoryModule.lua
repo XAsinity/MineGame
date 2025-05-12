@@ -1,6 +1,72 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PickaxeUtils = require(ReplicatedStorage:WaitForChild("PickaxeUtils"))
 local InventoryModule = {}
 
--- Synchronize Inventory with Data folders (Ores and Chests)
+-- Grants a pickaxe to the player
+function InventoryModule.grantPickaxeToPlayer(player, pickaxe)
+	local starterPickaxeModel = ReplicatedStorage:FindFirstChild("Starter Pickaxe")
+	if not starterPickaxeModel then
+		warn("Starter Pickaxe model not found in ReplicatedStorage!")
+		return
+	end
+
+	-- Clone the pickaxe model
+	local newPickaxe = starterPickaxeModel:Clone()
+	newPickaxe.Name = pickaxe.Name .. " (" .. pickaxe.Rarity .. ")"
+
+	-- Update the MiningSize value
+	local miningSizeValue = newPickaxe:FindFirstChild("MiningSize")
+	if miningSizeValue then
+		miningSizeValue.Value = pickaxe.MiningSize -- Assign the randomized mining size
+		print("MiningSize updated to:", miningSizeValue.Value)
+	else
+		-- If MiningSize doesn't exist, create it
+		miningSizeValue = Instance.new("IntValue")
+		miningSizeValue.Name = "MiningSize"
+		miningSizeValue.Value = pickaxe.MiningSize
+		miningSizeValue.Parent = newPickaxe
+		warn("MiningSize value was missing. Created dynamically.")
+	end
+
+	-- Update the Rarity value
+	local rarityValue = newPickaxe:FindFirstChild("Rarity")
+	if rarityValue then
+		rarityValue.Value = pickaxe.Rarity -- Assign the randomized rarity
+		print("Rarity updated to:", rarityValue.Value)
+	else
+		-- If Rarity doesn't exist, create it
+		rarityValue = Instance.new("StringValue")
+		rarityValue.Name = "Rarity"
+		rarityValue.Value = pickaxe.Rarity
+		rarityValue.Parent = newPickaxe
+		warn("Rarity value was missing. Created dynamically.")
+	end
+
+	-- Update the Durability value
+	local durabilityValue = newPickaxe:FindFirstChild("Durability")
+	if durabilityValue then
+		durabilityValue.Value = pickaxe.Durability -- Assign the randomized durability
+		print("Durability updated to:", durabilityValue.Value)
+	else
+		-- If Durability doesn't exist, create it
+		durabilityValue = Instance.new("IntValue")
+		durabilityValue.Name = "Durability"
+		durabilityValue.Value = pickaxe.Durability
+		durabilityValue.Parent = newPickaxe
+		warn("Durability value was missing. Created dynamically.")
+	end
+
+	-- Add the pickaxe to the player's Backpack
+	local backpack = player:FindFirstChild("Backpack")
+	if backpack then
+		newPickaxe.Parent = backpack
+		print("Granted new pickaxe to player:", pickaxe.Name, "with MiningSize:", miningSizeValue.Value, ", Rarity:", rarityValue.Value, ", and Durability:", durabilityValue.Value)
+	else
+		warn("Player's Backpack not found!")
+	end
+end
+
+-- Synchronize Inventory with Data folders (Ores, Chests, Pickaxes)
 function InventoryModule.syncInventoryWithData(player)
 	local inventory = player:FindFirstChild("Inventory")
 	local dataFolder = player:FindFirstChild("Data")
@@ -46,7 +112,49 @@ function InventoryModule.syncInventoryWithData(player)
 			warn("Ores folder not found for player:", player.Name)
 		end
 
-		print("Synchronized Data to Inventory for player:", player.Name) -- Debugging log
+		-- Synchronize from Data.Pickaxes to Inventory
+		local pickaxesFolder = dataFolder:FindFirstChild("Pickaxes")
+		if pickaxesFolder then
+			for _, pickaxe in pairs(pickaxesFolder:GetChildren()) do
+				local pickaxeItem = inventory:FindFirstChild(pickaxe.Name)
+				if not pickaxeItem then
+					pickaxeItem = Instance.new("Folder")
+					pickaxeItem.Name = pickaxe.Name
+					pickaxeItem.Parent = inventory
+
+					-- Add MiningSize
+					local miningSize = pickaxe:FindFirstChild("MiningSize")
+					if miningSize then
+						local miningSizeValue = Instance.new("IntValue")
+						miningSizeValue.Name = "MiningSize"
+						miningSizeValue.Value = miningSize.Value
+						miningSizeValue.Parent = pickaxeItem
+					end
+
+					-- Add Durability
+					local durability = pickaxe:FindFirstChild("Durability")
+					if durability then
+						local durabilityValue = Instance.new("IntValue")
+						durabilityValue.Name = "Durability"
+						durabilityValue.Value = durability.Value
+						durabilityValue.Parent = pickaxeItem
+					end
+
+					-- Add Rarity
+					local rarity = pickaxe:FindFirstChild("Rarity")
+					if rarity then
+						local rarityValue = Instance.new("StringValue")
+						rarityValue.Name = "Rarity"
+						rarityValue.Value = rarity.Value
+						rarityValue.Parent = pickaxeItem
+					end
+				end
+			end
+		else
+			warn("Pickaxes folder not found for player:", player.Name)
+		end
+
+		print("Synchronized Data to Inventory for player:", player.Name)
 	else
 		warn("Inventory or Data folder missing for player:", player.Name)
 	end
@@ -111,69 +219,6 @@ function InventoryModule.handleItemTouched(item, player, validOres)
 	else
 		warn("Unhandled item type:", item.Name)
 	end
-end
-
-function InventoryModule.grantPickaxeToPlayer(player, pickaxeDef)
-	local ReplicatedStorage = game:GetService("ReplicatedStorage")
-	local backpack = player:FindFirstChild("Backpack")
-	if not backpack then
-		warn("Player's Backpack not found!")
-		return
-	end
-
-	-- CLONE the Starter Pickaxe, don't create from scratch!
-	local starterTemplate = ReplicatedStorage:FindFirstChild("Starter Pickaxe")
-	if not starterTemplate then
-		warn("Starter Pickaxe template not found in ReplicatedStorage!")
-		return
-	end
-
-	local tool = starterTemplate:Clone()
-	tool.Name = pickaxeDef.Name .. " (" .. pickaxeDef.Rarity .. ")"
-
-	-- Set MiningSize in the Handle for mining logic
-	local handle = tool:FindFirstChild("Handle")
-	if handle then
-		local miningSizeValue = handle:FindFirstChild("MiningSize")
-		if miningSizeValue and miningSizeValue:IsA("IntValue") then
-			miningSizeValue.Value = pickaxeDef.MiningSize
-		else
-			-- If not present, create it
-			miningSizeValue = Instance.new("IntValue")
-			miningSizeValue.Name = "MiningSize"
-			miningSizeValue.Value = pickaxeDef.MiningSize
-			miningSizeValue.Parent = handle
-		end
-	else
-		warn("Handle missing in cloned tool!")
-	end
-
-	-- Add Rarity for reference
-	local rarityValue = tool:FindFirstChild("Rarity")
-	if not rarityValue then
-		rarityValue = Instance.new("StringValue")
-		rarityValue.Name = "Rarity"
-		rarityValue.Parent = tool
-	end
-	rarityValue.Value = pickaxeDef.Rarity
-
-	tool.Parent = backpack
-
-	-- Store a record in Inventory folder for UI/statistics
-	local inventory = player:FindFirstChild("Inventory")
-	if inventory then
-		local toolItem = inventory:FindFirstChild(tool.Name)
-		if toolItem then
-			toolItem.Value = toolItem.Value + 1
-		else
-			toolItem = Instance.new("IntValue")
-			toolItem.Name = tool.Name
-			toolItem.Value = 1
-			toolItem.Parent = inventory
-		end
-	end
-
-	print("Granted pickaxe to player: " .. tool.Name)
 end
 
 return InventoryModule
