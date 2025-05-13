@@ -17,10 +17,10 @@ PickaxeUtils.RarityList = {
 PickaxeUtils.RarityMiningRanges = {
 	Common = {
 		overall = {min = 1, max = 6},
-		favored = {min = 1, max = 4}, -- 80% chance to be in this favored range
+		favored = {min = 1, max = 4},
 		favoredWeight = 0.8,
 		decimalStep = 0.1,
-		durability = {min = 20, max = 50} -- Durability range for common tools
+		durability = {min = 20, max = 50}
 	},
 	Uncommon = {
 		overall = {min = 2, max = 8},
@@ -51,6 +51,11 @@ PickaxeUtils.RarityMiningRanges = {
 		durability = {min = 200, max = 300}
 	}
 }
+
+-- Generate a unique identifier for a pickaxe
+function PickaxeUtils.generatePickaxeId(rarity, durability)
+	return rarity .. "_" .. durability .. "_" .. os.time()
+end
 
 -- Roll a random rarity
 function PickaxeUtils.rollRarity()
@@ -96,17 +101,19 @@ function PickaxeUtils.rollDurability(rarity)
 	return math.random(range.min, range.max)
 end
 
--- Roll a random pickaxe
+-- Roll a random pickaxe with a unique ID
 function PickaxeUtils.rollPickaxe()
 	local rarity = PickaxeUtils.rollRarity()
 	local miningSize = PickaxeUtils.rollMiningSize(rarity)
 	local durability = PickaxeUtils.rollDurability(rarity)
+	local pickaxeId = PickaxeUtils.generatePickaxeId(rarity, durability)
 
 	return {
 		Name = rarity .. " Pickaxe",
 		MiningSize = miningSize,
 		Durability = durability,
-		Rarity = rarity
+		Rarity = rarity,
+		PickaxeId = pickaxeId
 	}
 end
 

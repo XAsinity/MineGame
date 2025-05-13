@@ -1,7 +1,6 @@
 -- Services
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- DataStore
 local playerDataStore = DataStoreService:GetDataStore("PlayerDataStore")
@@ -9,7 +8,10 @@ local playerDataStore = DataStoreService:GetDataStore("PlayerDataStore")
 -- Helper function to serialize data for saving
 local function serializePlayerData(player)
 	local dataFolder = player:FindFirstChild("Data")
-	if not dataFolder then return nil end
+	if not dataFolder then
+		warn("Data folder not found for player:", player.Name)
+		return nil
+	end
 
 	local data = {}
 
@@ -20,6 +22,9 @@ local function serializePlayerData(player)
 		for _, oreValue in pairs(oresFolder:GetChildren()) do
 			data.ores[oreValue.Name] = oreValue.Value
 		end
+		print("Serialized Ores for", player.Name, ":", data.ores)
+	else
+		warn("Ores folder not found for player:", player.Name)
 	end
 
 	-- Save chests
@@ -29,12 +34,18 @@ local function serializePlayerData(player)
 		for _, chestValue in pairs(chestsFolder:GetChildren()) do
 			data.chests[chestValue.Name] = chestValue.Value
 		end
+		print("Serialized Chests for", player.Name, ":", data.chests)
+	else
+		warn("Chests folder not found for player:", player.Name)
 	end
 
 	-- Save coins
 	local coins = dataFolder:FindFirstChild("Coins")
 	if coins then
 		data.coins = coins.Value
+		print("Serialized Coins for", player.Name, ":", coins.Value)
+	else
+		warn("Coins value not found for player:", player.Name)
 	end
 
 	-- Save pickaxes
@@ -49,6 +60,9 @@ local function serializePlayerData(player)
 				Rarity = pickaxe:FindFirstChild("Rarity") and pickaxe.Rarity.Value or "Unknown"
 			})
 		end
+		print("Serialized Pickaxes for", player.Name, ":", data.pickaxes)
+	else
+		warn("Pickaxes folder not found for player:", player.Name)
 	end
 
 	return data
@@ -56,75 +70,80 @@ end
 
 -- Helper function to deserialize data on player join
 local function deserializePlayerData(player, data)
-	if not data then return end
+	if not data then
+		warn("No data to deserialize for player:", player.Name)
+		return
+	end
+
+	print("Deserializing data for player:", player.Name, ":", data)
 
 	local dataFolder = player:FindFirstChild("Data")
 	if not dataFolder then
-		dataFolder = Instance.new("Folder")
-		dataFolder.Name = "Data"
-		dataFolder.Parent = player
+		warn("Data folder missing. Initialization should ensure its existence.")
+		return
 	end
 
 	-- Load ores
-	local oresFolder = Instance.new("Folder")
+	local oresFolder = dataFolder:FindFirstChild("Ores") or Instance.new("Folder", dataFolder)
 	oresFolder.Name = "Ores"
-	oresFolder.Parent = dataFolder
 
 	if data.ores then
 		for oreType, value in pairs(data.ores) do
-			local oreValue = Instance.new("IntValue")
+			local oreValue = oresFolder:FindFirstChild(oreType) or Instance.new("IntValue", oresFolder)
 			oreValue.Name = oreType
 			oreValue.Value = value
-			oreValue.Parent = oresFolder
+			print("Loaded Ore:", oreType, "Value:", value)
 		end
+	else
+		warn("No ores data found for player:", player.Name)
 	end
 
 	-- Load chests
-	local chestsFolder = Instance.new("Folder")
+	local chestsFolder = dataFolder:FindFirstChild("Chests") or Instance.new("Folder", dataFolder)
 	chestsFolder.Name = "Chests"
-	chestsFolder.Parent = dataFolder
 
 	if data.chests then
 		for chestType, value in pairs(data.chests) do
-			local chestValue = Instance.new("IntValue")
+			local chestValue = chestsFolder:FindFirstChild(chestType) or Instance.new("IntValue", chestsFolder)
 			chestValue.Name = chestType
 			chestValue.Value = value
-			chestValue.Parent = chestsFolder
+			print("Loaded Chest:", chestType, "Value:", value)
 		end
+	else
+		warn("No chests data found for player:", player.Name)
 	end
 
 	-- Load coins
-	local coins = Instance.new("IntValue")
+	local coins = dataFolder:FindFirstChild("Coins") or Instance.new("IntValue", dataFolder)
 	coins.Name = "Coins"
 	coins.Value = data.coins or 0
-	coins.Parent = dataFolder
+	print("Loaded Coins for", player.Name, ":", coins.Value)
 
 	-- Load pickaxes
-	local pickaxesFolder = Instance.new("Folder")
+	local pickaxesFolder = dataFolder:FindFirstChild("Pickaxes") or Instance.new("Folder", dataFolder)
 	pickaxesFolder.Name = "Pickaxes"
-	pickaxesFolder.Parent = dataFolder
 
 	if data.pickaxes then
 		for _, pickaxeData in pairs(data.pickaxes) do
-			local pickaxe = Instance.new("Folder")
+			local pickaxe = pickaxesFolder:FindFirstChild(pickaxeData.Name) or Instance.new("Folder", pickaxesFolder)
 			pickaxe.Name = pickaxeData.Name
-			pickaxe.Parent = pickaxesFolder
 
-			local miningSize = Instance.new("IntValue")
+			local miningSize = pickaxe:FindFirstChild("MiningSize") or Instance.new("IntValue", pickaxe)
 			miningSize.Name = "MiningSize"
 			miningSize.Value = pickaxeData.MiningSize
-			miningSize.Parent = pickaxe
 
-			local durability = Instance.new("IntValue")
+			local durability = pickaxe:FindFirstChild("Durability") or Instance.new("IntValue", pickaxe)
 			durability.Name = "Durability"
 			durability.Value = pickaxeData.Durability
-			durability.Parent = pickaxe
 
-			local rarity = Instance.new("StringValue")
+			local rarity = pickaxe:FindFirstChild("Rarity") or Instance.new("StringValue", pickaxe)
 			rarity.Name = "Rarity"
 			rarity.Value = pickaxeData.Rarity
-			rarity.Parent = pickaxe
+
+			print("Loaded Pickaxe:", pickaxeData)
 		end
+	else
+		warn("No pickaxes data found for player:", player.Name)
 	end
 end
 
@@ -134,9 +153,16 @@ local function savePlayerData(player)
 	local data = serializePlayerData(player)
 
 	if data then
-		pcall(function()
+		local success, errorMessage = pcall(function()
 			playerDataStore:SetAsync(key, data)
 		end)
+		if success then
+			print("Data successfully saved for player:", player.Name)
+		else
+			warn("Failed to save data for player:", player.Name, "Error:", errorMessage)
+		end
+	else
+		warn("No data to save for player:", player.Name)
 	end
 end
 
@@ -148,6 +174,7 @@ local function loadPlayerData(player)
 	end)
 
 	if success then
+		print("Data successfully loaded for player:", player.Name, "Data:", data)
 		deserializePlayerData(player, data)
 	else
 		warn("Failed to load data for player:", player.Name)

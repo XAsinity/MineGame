@@ -2,28 +2,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local PickaxeUtils = require(ReplicatedStorage:WaitForChild("PickaxeUtils"))
 
--- Utility: Prints player's current Backpack tools for debugging
-local function debugInventory(player)
-	local backpack = player:FindFirstChild("Backpack")
-	if backpack then
-		print("Player's inventory:")
-		local toolCount = 0
-		for _, tool in pairs(backpack:GetChildren()) do
-			if tool:IsA("Tool") then
-				toolCount += 1
-				print("Tool:", tool.Name)
-				for _, child in pairs(tool:GetDescendants()) do
-					print("  Child:", child.Name, "Class:", child.ClassName)
-				end
-			end
-		end
-		print("Total tools in inventory:", toolCount)
-	else
-		warn("Backpack not found for player:", player.Name)
-	end
-end
-
--- Grants a pickaxe to the player, dynamically creating MiningSize, Rarity, and Durability
 local function grantPickaxeToPlayer(player, pickaxe)
 	-- Fetch the Starter Pickaxe model from ReplicatedStorage
 	local starterPickaxeModel = ReplicatedStorage:FindFirstChild("Starter Pickaxe")
@@ -36,66 +14,92 @@ local function grantPickaxeToPlayer(player, pickaxe)
 	local newPickaxe = starterPickaxeModel:Clone()
 	newPickaxe.Name = pickaxe.Name .. " (" .. pickaxe.Rarity .. ")"
 
-	-- Dynamically create and assign the MiningSize value
-	local miningSizeValue = newPickaxe:FindFirstChild("MiningSize") or Instance.new("IntValue")
+	-- Ensure attributes are only added to the root tool, not its children
+	-- Remove any existing attributes from the tool model and its children
+	for _, child in pairs(newPickaxe:GetDescendants()) do
+		if child:IsA("IntValue") or child:IsA("StringValue") then
+			child:Destroy()
+		end
+	end
+
+	-- Assign attributes using PickaxeUtils data
+	local miningSizeValue = Instance.new("IntValue")
 	miningSizeValue.Name = "MiningSize"
 	miningSizeValue.Value = pickaxe.MiningSize
 	miningSizeValue.Parent = newPickaxe
-	print("MiningSize set to:", miningSizeValue.Value)
 
-	-- Dynamically create and assign the Rarity value
-	local rarityValue = newPickaxe:FindFirstChild("Rarity") or Instance.new("StringValue")
-	rarityValue.Name = "Rarity"
-	rarityValue.Value = pickaxe.Rarity
-	rarityValue.Parent = newPickaxe
-	print("Rarity set to:", rarityValue.Value)
-
-	-- Dynamically create and assign the Durability value
-	local durabilityValue = newPickaxe:FindFirstChild("Durability") or Instance.new("IntValue")
+	local durabilityValue = Instance.new("IntValue")
 	durabilityValue.Name = "Durability"
 	durabilityValue.Value = pickaxe.Durability
 	durabilityValue.Parent = newPickaxe
-	print("Durability set to:", durabilityValue.Value)
+
+	local rarityValue = Instance.new("StringValue")
+	rarityValue.Name = "Rarity"
+	rarityValue.Value = pickaxe.Rarity
+	rarityValue.Parent = newPickaxe
+
+	local pickaxeIdValue = Instance.new("StringValue")
+	pickaxeIdValue.Name = "PickaxeId"
+	pickaxeIdValue.Value = pickaxe.PickaxeId
+	pickaxeIdValue.Parent = newPickaxe
 
 	-- Place the pickaxe in the player's Backpack
 	local backpack = player:FindFirstChild("Backpack")
 	if backpack then
 		newPickaxe.Parent = backpack
-		print("Granted new pickaxe to player:", pickaxe.Name, "with MiningSize:", miningSizeValue.Value, ", Rarity:", rarityValue.Value, ", and Durability:", durabilityValue.Value)
+		print("Granted new pickaxe to player:", pickaxe.Name, "with ID:", pickaxe.PickaxeId, ", MiningSize:", pickaxe.MiningSize, ", Rarity:", pickaxe.Rarity, ", and Durability:", pickaxe.Durability)
 	else
 		warn("Player's Backpack not found!")
 	end
 
-	-- Debug inventory after granting the pickaxe
-	debugInventory(player)
+	-- Add the pickaxe to the player's Data.Pickaxes folder
+	local dataFolder = player:FindFirstChild("Data")
+	if not dataFolder then
+		dataFolder = Instance.new("Folder")
+		dataFolder.Name = "Data"
+		dataFolder.Parent = player
+	end
+
+	local pickaxesFolder = dataFolder:FindFirstChild("Pickaxes") or Instance.new("Folder")
+	pickaxesFolder.Name = "Pickaxes"
+	pickaxesFolder.Parent = dataFolder
+
+	local pickaxeDataFolder = pickaxesFolder:FindFirstChild(pickaxe.PickaxeId) or Instance.new("Folder")
+	pickaxeDataFolder.Name = pickaxe.PickaxeId
+	pickaxeDataFolder.Parent = pickaxesFolder
+
+	-- Add pickaxe attributes to the folder
+	local durabilityData = pickaxeDataFolder:FindFirstChild("Durability") or Instance.new("IntValue")
+	durabilityData.Name = "Durability"
+	durabilityData.Value = pickaxe.Durability
+	durabilityData.Parent = pickaxeDataFolder
+
+	local miningSizeData = pickaxeDataFolder:FindFirstChild("MiningSize") or Instance.new("IntValue")
+	miningSizeData.Name = "MiningSize"
+	miningSizeData.Value = pickaxe.MiningSize
+	miningSizeData.Parent = pickaxeDataFolder
+
+	local rarityData = pickaxeDataFolder:FindFirstChild("Rarity") or Instance.new("StringValue")
+	rarityData.Name = "Rarity"
+	rarityData.Value = pickaxe.Rarity
+	rarityData.Parent = pickaxeDataFolder
+
+	print("Added pickaxe to Data.Pickaxes for player:", player.Name)
 end
 
--- Example: When a player joins, only grant a starter pickaxe if they don't have one
-Players.PlayerAdded:Connect(function(player)
-	player.CharacterAdded:Connect(function()
-		-- Wait for Backpack
-		repeat wait() until player:FindFirstChild("Backpack")
-		debugInventory(player)
+-- Event listener for RequestRandomPickaxeEvent
+local RequestRandomPickaxeEvent = ReplicatedStorage:FindFirstChild("RequestRandomPickaxeEvent")
+if RequestRandomPickaxeEvent then
+	RequestRandomPickaxeEvent.OnServerEvent:Connect(function(player)
+		print("RequestRandomPickaxeEvent received from player:", player.Name)
 
-		local alreadyHasPickaxe = false
-		for _, tool in pairs(player.Backpack:GetChildren()) do
-			if tool:IsA("Tool") and tool:FindFirstChild("Handle") then
-				alreadyHasPickaxe = true
-				break
-			end
-		end
+		-- Roll for a random pickaxe using PickaxeUtils
+		local randomPickaxe = PickaxeUtils.rollPickaxe()
+		print("Rolled random pickaxe for player:", player.Name, "with ID:", randomPickaxe.PickaxeId, ", MiningSize:", randomPickaxe.MiningSize, ", Rarity:", randomPickaxe.Rarity, ", and Durability:", randomPickaxe.Durability)
 
-		if not alreadyHasPickaxe then
-			-- Grant a starter pickaxe (always common)
-			print("Granting starter pickaxe to player:", player.Name)
-			local starterPickaxe = PickaxeUtils.rollPickaxe()
-			starterPickaxe.Name = "Starter Pickaxe" -- Override name for starter pickaxe
-			starterPickaxe.Rarity = "Common" -- Ensure starter pickaxe is always Common
-			starterPickaxe.MiningSize = 4 -- Fixed mining size for starter pickaxe
-			starterPickaxe.Durability = 100 -- Fixed durability for starter pickaxe
-			grantPickaxeToPlayer(player, starterPickaxe)
-		else
-			print("Player already has a pickaxe. No starter pickaxe granted.")
-		end
+		-- Grant the rolled pickaxe to the player
+		grantPickaxeToPlayer(player, randomPickaxe)
 	end)
-end)
+else
+	warn("RequestRandomPickaxeEvent not found in ReplicatedStorage!")
+end
