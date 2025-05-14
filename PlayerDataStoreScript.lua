@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
 local ServerScriptService = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local removeChestEvent = ReplicatedStorage:WaitForChild("RemoveChestEvent")
 
 -- Wait for InventoryModule in ServerScriptService
 local InventoryModule
@@ -17,9 +18,11 @@ end
 -- DataStore
 local playerDataStore = DataStoreService:GetDataStore("PlayerDataStore")
 
+-- Table to track pending chest confirmations
+local pendingConfirmations = {}
+
 -- Helper function to recreate a pickaxe tool from ReplicatedStorage
 local function recreatePickaxeTool(player, pickaxeData)
-	-- Locate the Starter Pickaxe in ReplicatedStorage
 	local basePickaxeTool = ReplicatedStorage:FindFirstChild("Starter Pickaxe") -- Ensure this is the correct name
 	if not basePickaxeTool then
 		warn("Starter Pickaxe tool not found in ReplicatedStorage!")
@@ -238,6 +241,54 @@ local function loadPlayerData(player)
 		warn("Failed to load data for player:", player.Name)
 	end
 end
+
+-- Listen for RemoveChestEvent from client
+removeChestEvent.OnServerEvent:Connect(function(player, chestName, removeCompletely)
+	local dataFolder = player:FindFirstChild("Data")
+	if not dataFolder then
+		warn("Data folder not found for player:", player.Name)
+		return
+	end
+
+	local chestsFolder = dataFolder:FindFirstChild("Chests")
+	if not chestsFolder then
+		warn("Chests folder not found for player:", player.Name)
+		return
+	end
+
+	-- Attempt to delete or decrement chest
+	local function deleteChest()
+		local chest = chestsFolder:FindFirstChild(chestName)
+		if chest then
+			if removeCompletely then
+				chest:Destroy()
+				print("Chest completely removed from inventory:", chestName)
+			else
+				chest.Value = math.max(chest.Value - 1, 0)
+				print("Chest count decreased in inventory:", chestName, "New count:", chest.Value)
+				if chest.Value == 0 then
+					chest:Destroy()
+				end
+			end
+		else
+			warn("Chest not found in inventory for player:", player.Name)
+		end
+	end
+
+	-- Run the delete logic twice
+	deleteChest()
+	task.wait(0.1) -- Short delay before retrying
+	deleteChest()
+
+	-- Scan for the chest after both attempts
+	local remainingChest = chestsFolder:FindFirstChild(chestName)
+	if remainingChest then
+		print("Chest still exists after deletion attempts. Forcing removal:", chestName)
+		remainingChest:Destroy()
+	else
+		print("Chest successfully removed after verification:", chestName)
+	end
+end)
 
 -- PlayerAdded: Load data when a player joins
 Players.PlayerAdded:Connect(function(player)

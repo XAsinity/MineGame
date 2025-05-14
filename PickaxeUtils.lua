@@ -20,35 +20,35 @@ PickaxeUtils.RarityMiningRanges = {
 		favored = {min = 1, max = 4},
 		favoredWeight = 0.8,
 		decimalStep = 0.1,
-		durability = {min = 20, max = 50}
+		durability = {min = 900, max = 5000}
 	},
 	Uncommon = {
 		overall = {min = 2, max = 8},
 		favored = {min = 4, max = 6},
 		favoredWeight = 0.7,
 		decimalStep = 0.1,
-		durability = {min = 50, max = 100}
+		durability = {min = 850, max = 4000}
 	},
 	Rare = {
 		overall = {min = 4, max = 10},
 		favored = {min = 8, max = 10},
 		favoredWeight = 0.6,
 		decimalStep = 0.1,
-		durability = {min = 100, max = 150}
+		durability = {min = 350, max = 3500}
 	},
 	Epic = {
 		overall = {min = 7, max = 12},
 		favored = {min = 10, max = 12},
 		favoredWeight = 0.5,
 		decimalStep = 0.1,
-		durability = {min = 150, max = 200}
+		durability = {min = 200, max = 1500}
 	},
 	Legendary = {
 		overall = {min = 10, max = 15},
 		favored = {min = 13, max = 15},
 		favoredWeight = 0.4,
 		decimalStep = 0.1,
-		durability = {min = 200, max = 300}
+		durability = {min = 100, max = 1000}
 	}
 }
 
