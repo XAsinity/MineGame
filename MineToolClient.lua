@@ -47,7 +47,10 @@ tool.Activated:Connect(function()
 
 			-- Check if the tool is fully broken after mining
 			if durabilityValue.Value <= 0 then
+				-- Notify the player visually or audibly that the tool is broken
 				print("The tool has broken and can no longer be used.")
+				-- Optionally, you can fire an event to indicate the tool is broken
+				-- For example: ReplicatedStorage:WaitForChild("ToolBrokenEvent"):FireServer(tool)
 			end
 		else
 			print("Target is not part of the terrain!")

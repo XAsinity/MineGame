@@ -85,6 +85,50 @@ local function initializePlayerData(player)
 	debugCoinsPlacement(player)
 end
 
+-- Function to initialize a pickaxe from saved data
+local function initializePickaxeFromData(player, pickaxeData)
+	local basePickaxeTool = ReplicatedStorage:FindFirstChild("Starter Pickaxe")
+	if not basePickaxeTool then
+		warn("Starter Pickaxe tool not found in ReplicatedStorage!")
+		return nil
+	end
+
+	-- Clone the Tool
+	local pickaxeTool = basePickaxeTool:Clone()
+	pickaxeTool.Name = pickaxeData.Name
+
+	-- Place attributes directly under the Tool
+	local function updateOrAddValue(parent, valueName, valueType, value)
+		local existingValue = parent:FindFirstChild(valueName)
+		if existingValue then
+			existingValue.Value = value
+		else
+			local newValue = Instance.new(valueType)
+			newValue.Name = valueName
+			newValue.Value = value
+			newValue.Parent = parent
+		end
+	end
+
+	-- Update MiningSize
+	updateOrAddValue(pickaxeTool, "MiningSize", "IntValue", pickaxeData.MiningSize)
+
+	-- Update Durability
+	updateOrAddValue(pickaxeTool, "Durability", "IntValue", pickaxeData.Durability)
+
+	-- Update Rarity
+	updateOrAddValue(pickaxeTool, "Rarity", "StringValue", pickaxeData.Rarity)
+
+	-- Place the Tool in the player's Backpack
+	local backpack = player:FindFirstChild("Backpack")
+	if backpack then
+		pickaxeTool.Parent = backpack
+		print("Initialized and added pickaxe to backpack:", pickaxeData.Name)
+	else
+		warn("Backpack not found for player:", player.Name)
+	end
+end
+
 -- Function to give the player a Starter Pickaxe
 local function giveStarterPickaxe(player)
 	local starterPickaxeTemplate = ReplicatedStorage:FindFirstChild("Starter Pickaxe")
@@ -122,8 +166,23 @@ Players.PlayerAdded:Connect(function(player)
 	player.CharacterAdded:Connect(function()
 		wait(1) -- Delay to ensure the player's character and data folders are fully loaded
 
-		-- Give the player a starter pickaxe if they don't already have one
+		-- Load saved pickaxes into the Backpack
 		local pickaxesFolder = player:FindFirstChild("Data") and player.Data:FindFirstChild("Pickaxes")
+		if pickaxesFolder then
+			for _, pickaxeData in pairs(pickaxesFolder:GetChildren()) do
+				local pickaxeInfo = {
+					Name = pickaxeData.Name,
+					MiningSize = pickaxeData:FindFirstChild("MiningSize") and pickaxeData.MiningSize.Value or 1,
+					Durability = pickaxeData:FindFirstChild("Durability") and pickaxeData.Durability.Value or 100,
+					Rarity = pickaxeData:FindFirstChild("Rarity") and pickaxeData.Rarity.Value or "Common"
+				}
+				initializePickaxeFromData(player, pickaxeInfo)
+			end
+		else
+			warn("Pickaxes folder missing for player:", player.Name)
+		end
+
+		-- Give the player a starter pickaxe if they don't already have one
 		if pickaxesFolder and #pickaxesFolder:GetChildren() == 0 then
 			giveStarterPickaxe(player)
 		end

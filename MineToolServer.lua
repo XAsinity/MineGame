@@ -88,6 +88,19 @@ local function mineTerrain(player, targetPosition, miningSize)
 		durabilityValue.Value -= 1
 		print(player.Name .. "'s pickaxe durability decreased to:", durabilityValue.Value)
 
+		-- Save the updated durability to the player's data
+		local pickaxesFolder = player:FindFirstChild("Data") and player.Data:FindFirstChild("Pickaxes")
+		if pickaxesFolder then
+			local pickaxeData = pickaxesFolder:FindFirstChild(equippedPickaxe.Name)
+			if pickaxeData then
+				local durabilityData = pickaxeData:FindFirstChild("Durability")
+				if durabilityData then
+					durabilityData.Value = durabilityValue.Value
+					print("Durability value saved for pickaxe:", equippedPickaxe.Name)
+				end
+			end
+		end
+
 		-- Perform terrain modification
 		local radius = miningSize * 1.5
 		local centerPosition = targetPosition

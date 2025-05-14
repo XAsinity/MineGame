@@ -1,9 +1,57 @@
 -- Services
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
+local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Wait for InventoryModule in ServerScriptService
+local InventoryModule
+local success, err = pcall(function()
+	InventoryModule = require(ServerScriptService:WaitForChild("InventoryModule"))
+end)
+
+if not success then
+	warn("Failed to load InventoryModule:", err)
+end
 
 -- DataStore
 local playerDataStore = DataStoreService:GetDataStore("PlayerDataStore")
+
+-- Helper function to recreate a pickaxe tool from ReplicatedStorage
+local function recreatePickaxeTool(player, pickaxeData)
+	-- Locate the Starter Pickaxe in ReplicatedStorage
+	local basePickaxeTool = ReplicatedStorage:FindFirstChild("Starter Pickaxe") -- Ensure this is the correct name
+	if not basePickaxeTool then
+		warn("Starter Pickaxe tool not found in ReplicatedStorage!")
+		return nil
+	end
+
+	-- Clone the Tool
+	local pickaxeTool = basePickaxeTool:Clone()
+	pickaxeTool.Name = pickaxeData.Name
+
+	-- Update the Tool's values
+	local durabilityValue = pickaxeTool:FindFirstChild("Durability") or Instance.new("IntValue", pickaxeTool)
+	durabilityValue.Name = "Durability"
+	durabilityValue.Value = pickaxeData.Durability
+
+	local miningSizeValue = pickaxeTool:FindFirstChild("MiningSize") or Instance.new("IntValue", pickaxeTool)
+	miningSizeValue.Name = "MiningSize"
+	miningSizeValue.Value = pickaxeData.MiningSize
+
+	local rarityValue = pickaxeTool:FindFirstChild("Rarity") or Instance.new("StringValue", pickaxeTool)
+	rarityValue.Name = "Rarity"
+	rarityValue.Value = pickaxeData.Rarity
+
+	-- Place the Tool in the player's Backpack
+	local backpack = player:FindFirstChild("Backpack")
+	if backpack then
+		pickaxeTool.Parent = backpack
+		print("Recreated and added pickaxe to backpack:", pickaxeData.Name)
+	else
+		warn("Backpack not found for player:", player.Name)
+	end
+end
 
 -- Helper function to serialize data for saving
 local function serializePlayerData(player)
@@ -119,7 +167,7 @@ local function deserializePlayerData(player, data)
 	coins.Value = data.coins or 0
 	print("Loaded Coins for", player.Name, ":", coins.Value)
 
-	-- Load pickaxes
+	-- Load and recreate pickaxes
 	local pickaxesFolder = dataFolder:FindFirstChild("Pickaxes") or Instance.new("Folder", dataFolder)
 	pickaxesFolder.Name = "Pickaxes"
 
@@ -141,6 +189,9 @@ local function deserializePlayerData(player, data)
 			rarity.Value = pickaxeData.Rarity
 
 			print("Loaded Pickaxe:", pickaxeData)
+
+			-- Recreate the pickaxe tool and add it to the player's backpack
+			recreatePickaxeTool(player, pickaxeData)
 		end
 	else
 		warn("No pickaxes data found for player:", player.Name)
@@ -176,6 +227,13 @@ local function loadPlayerData(player)
 	if success then
 		print("Data successfully loaded for player:", player.Name, "Data:", data)
 		deserializePlayerData(player, data)
+
+		-- Synchronize inventory with data
+		if InventoryModule then
+			InventoryModule.syncInventoryWithData(player)
+		else
+			warn("InventoryModule is missing. Cannot synchronize inventory.")
+		end
 	else
 		warn("Failed to load data for player:", player.Name)
 	end
