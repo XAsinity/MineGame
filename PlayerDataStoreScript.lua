@@ -4,6 +4,7 @@ local DataStoreService = game:GetService("DataStoreService")
 local ServerScriptService = game:GetService("ServerScriptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local removeChestEvent = ReplicatedStorage:WaitForChild("RemoveChestEvent")
+local sellPickaxeEvent = ReplicatedStorage:WaitForChild("SellPickaxeEvent") -- Event for selling pickaxes
 
 -- Wait for InventoryModule in ServerScriptService
 local InventoryModule
@@ -18,41 +19,51 @@ end
 -- DataStore
 local playerDataStore = DataStoreService:GetDataStore("PlayerDataStore")
 
--- Table to track pending chest confirmations
-local pendingConfirmations = {}
-
--- Helper function to recreate a pickaxe tool from ReplicatedStorage
-local function recreatePickaxeTool(player, pickaxeData)
-	local basePickaxeTool = ReplicatedStorage:FindFirstChild("Starter Pickaxe") -- Ensure this is the correct name
-	if not basePickaxeTool then
-		warn("Starter Pickaxe tool not found in ReplicatedStorage!")
-		return nil
+-- Helper function to recreate all owned pickaxes as Tools in the Backpack
+local function grantAllPickaxesToBackpack(player)
+	local dataPickaxes = player:FindFirstChild("Data") and player.Data:FindFirstChild("Pickaxes")
+	local backpack = player:FindFirstChild("Backpack")
+	if not (dataPickaxes and backpack) then
+		warn("Missing Data.Pickaxes or Backpack for player:", player.Name)
+		return
 	end
 
-	-- Clone the Tool
-	local pickaxeTool = basePickaxeTool:Clone()
-	pickaxeTool.Name = pickaxeData.Name
+	print("Running grantAllPickaxesToBackpack for", player.Name)
 
-	-- Update the Tool's values
-	local durabilityValue = pickaxeTool:FindFirstChild("Durability") or Instance.new("IntValue", pickaxeTool)
-	durabilityValue.Name = "Durability"
-	durabilityValue.Value = pickaxeData.Durability
+	-- Remove existing pickaxes/tools to avoid duplicates
+	for _, tool in ipairs(backpack:GetChildren()) do
+		if tool:IsA("Tool") then
+			tool:Destroy()
+		end
+	end
 
-	local miningSizeValue = pickaxeTool:FindFirstChild("MiningSize") or Instance.new("IntValue", pickaxeTool)
-	miningSizeValue.Name = "MiningSize"
-	miningSizeValue.Value = pickaxeData.MiningSize
-
-	local rarityValue = pickaxeTool:FindFirstChild("Rarity") or Instance.new("StringValue", pickaxeTool)
-	rarityValue.Name = "Rarity"
-	rarityValue.Value = pickaxeData.Rarity
-
-	-- Place the Tool in the player's Backpack
-	local backpack = player:FindFirstChild("Backpack")
-	if backpack then
-		pickaxeTool.Parent = backpack
-		print("Recreated and added pickaxe to backpack:", pickaxeData.Name)
-	else
-		warn("Backpack not found for player:", player.Name)
+	-- For each owned pickaxe in Data.Pickaxes, clone the template and add stats
+	for _, pickaxeFolder in ipairs(dataPickaxes:GetChildren()) do
+		local toolTemplate = ReplicatedStorage:FindFirstChild("Starter Pickaxe")
+		if toolTemplate then
+			local tool = toolTemplate:Clone()
+			tool.Name = pickaxeFolder.Name
+			for _, statName in ipairs({"MiningSize", "Durability", "Rarity"}) do
+				local valueObj = pickaxeFolder:FindFirstChild(statName)
+				if valueObj then
+					local newValue
+					if valueObj:IsA("IntValue") then
+						newValue = Instance.new("IntValue")
+					elseif valueObj:IsA("StringValue") then
+						newValue = Instance.new("StringValue")
+					end
+					if newValue then
+						newValue.Name = statName
+						newValue.Value = valueObj.Value
+						newValue.Parent = tool
+					end
+				end
+			end
+			tool.Parent = backpack
+			print("Recreated and added pickaxe to backpack:", tool.Name)
+		else
+			warn("Starter Pickaxe template missing in ReplicatedStorage!")
+		end
 	end
 end
 
@@ -99,17 +110,20 @@ local function serializePlayerData(player)
 		warn("Coins value not found for player:", player.Name)
 	end
 
-	-- Save pickaxes
+	-- Save pickaxes (limit to 20)
 	local pickaxesFolder = dataFolder:FindFirstChild("Pickaxes")
 	if pickaxesFolder then
 		data.pickaxes = {}
-		for _, pickaxe in pairs(pickaxesFolder:GetChildren()) do
+		local count = 0
+		for _, pickaxe in ipairs(pickaxesFolder:GetChildren()) do
+			if count >= 20 then break end
 			table.insert(data.pickaxes, {
 				Name = pickaxe.Name,
 				MiningSize = pickaxe:FindFirstChild("MiningSize") and pickaxe.MiningSize.Value or 0,
 				Durability = pickaxe:FindFirstChild("Durability") and pickaxe.Durability.Value or 0,
 				Rarity = pickaxe:FindFirstChild("Rarity") and pickaxe.Rarity.Value or "Unknown"
 			})
+			count += 1
 		end
 		print("Serialized Pickaxes for", player.Name, ":", data.pickaxes)
 	else
@@ -170,12 +184,13 @@ local function deserializePlayerData(player, data)
 	coins.Value = data.coins or 0
 	print("Loaded Coins for", player.Name, ":", coins.Value)
 
-	-- Load and recreate pickaxes
+	-- Load and recreate pickaxes (limit to 20)
 	local pickaxesFolder = dataFolder:FindFirstChild("Pickaxes") or Instance.new("Folder", dataFolder)
 	pickaxesFolder.Name = "Pickaxes"
 
 	if data.pickaxes then
-		for _, pickaxeData in pairs(data.pickaxes) do
+		for i, pickaxeData in ipairs(data.pickaxes) do
+			if i > 20 then break end
 			local pickaxe = pickaxesFolder:FindFirstChild(pickaxeData.Name) or Instance.new("Folder", pickaxesFolder)
 			pickaxe.Name = pickaxeData.Name
 
@@ -192,13 +207,13 @@ local function deserializePlayerData(player, data)
 			rarity.Value = pickaxeData.Rarity
 
 			print("Loaded Pickaxe:", pickaxeData)
-
-			-- Recreate the pickaxe tool and add it to the player's backpack
-			recreatePickaxeTool(player, pickaxeData)
 		end
 	else
 		warn("No pickaxes data found for player:", player.Name)
 	end
+
+	-- Mark that pickaxes are ready
+	player:SetAttribute("PickaxesReady", true)
 end
 
 -- Save player data on leave
@@ -242,7 +257,29 @@ local function loadPlayerData(player)
 	end
 end
 
--- Listen for RemoveChestEvent from client
+-- Function to remove a pickaxe from player data
+local function removePickaxeFromData(player, pickaxeName)
+	local dataFolder = player:FindFirstChild("Data")
+	if not dataFolder then
+		warn("Data folder not found for player:", player.Name)
+		return
+	end
+
+	local pickaxesFolder = dataFolder:FindFirstChild("Pickaxes")
+	if not pickaxesFolder then
+		warn("Pickaxes folder not found in data for player:", player.Name)
+		return
+	end
+
+	-- Function to delete the pickaxe
+	local pickaxe = pickaxesFolder:FindFirstChild(pickaxeName)
+	if pickaxe then
+		pickaxe:Destroy()
+		print("Pickaxe removed from data:", pickaxeName)
+	else
+		warn("Pickaxe not found in data:", pickaxeName)
+	end
+end
 removeChestEvent.OnServerEvent:Connect(function(player, chestName, removeCompletely)
 	local dataFolder = player:FindFirstChild("Data")
 	if not dataFolder then
@@ -257,42 +294,64 @@ removeChestEvent.OnServerEvent:Connect(function(player, chestName, removeComplet
 	end
 
 	-- Attempt to delete or decrement chest
-	local function deleteChest()
-		local chest = chestsFolder:FindFirstChild(chestName)
-		if chest then
-			if removeCompletely then
-				chest:Destroy()
-				print("Chest completely removed from inventory:", chestName)
-			else
-				chest.Value = math.max(chest.Value - 1, 0)
-				print("Chest count decreased in inventory:", chestName, "New count:", chest.Value)
-				if chest.Value == 0 then
-					chest:Destroy()
-				end
-			end
+	local chest = chestsFolder:FindFirstChild(chestName)
+	if chest then
+		if removeCompletely then
+			chest:Destroy()
+			print("Chest completely removed from inventory:", chestName)
 		else
-			warn("Chest not found in inventory for player:", player.Name)
+			chest.Value = math.max(chest.Value - 1, 0)
+			print("Chest count decreased in inventory:", chestName, "New count:", chest.Value)
+			if chest.Value == 0 then
+				chest:Destroy()
+			end
 		end
-	end
-
-	-- Run the delete logic twice
-	deleteChest()
-	task.wait(0.1) -- Short delay before retrying
-	deleteChest()
-
-	-- Scan for the chest after both attempts
-	local remainingChest = chestsFolder:FindFirstChild(chestName)
-	if remainingChest then
-		print("Chest still exists after deletion attempts. Forcing removal:", chestName)
-		remainingChest:Destroy()
+		-- <<<<<<<< THIS LINE IS THE FIX >>>>>>>>
+		if InventoryModule and InventoryModule.syncInventoryWithData then
+			InventoryModule.syncInventoryWithData(player)
+		end
 	else
-		print("Chest successfully removed after verification:", chestName)
+		warn("Chest not found in inventory for player:", player.Name)
 	end
+end)
+
+-- Listen for SellPickaxeEvent from client
+sellPickaxeEvent.OnServerEvent:Connect(function(player, pickaxeName)
+	-- Remove pickaxe from data
+	removePickaxeFromData(player, pickaxeName)
 end)
 
 -- PlayerAdded: Load data when a player joins
 Players.PlayerAdded:Connect(function(player)
 	loadPlayerData(player)
+
+	player.CharacterAdded:Connect(function()
+		-- Wait until Backpack exists
+		while not player:FindFirstChild("Backpack") do
+			task.wait(0.1)
+		end
+		-- Wait until Pickaxes are loaded
+		while not player:GetAttribute("PickaxesReady") do
+			task.wait(0.1)
+		end
+
+		-- Wait for at least one pickaxe or a short timeout (so an empty backpack is possible)
+		local dataPickaxes = player:FindFirstChild("Data") and player.Data:FindFirstChild("Pickaxes")
+		local waited = 0
+		while dataPickaxes and #dataPickaxes:GetChildren() == 0 and waited < 2 do
+			task.wait(0.2)
+			waited = waited + 0.2
+		end
+
+		grantAllPickaxesToBackpack(player)
+
+		-- Listen for new pickaxes being added while in game (handles chests, purchases, etc)
+		if dataPickaxes then
+			dataPickaxes.ChildAdded:Connect(function(child)
+				grantAllPickaxesToBackpack(player)
+			end)
+		end
+	end)
 end)
 
 -- PlayerRemoving: Save data when a player leaves

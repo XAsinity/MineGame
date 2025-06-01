@@ -20,48 +20,53 @@ end
 local function grantPickaxeToPlayer(player, pickaxeData)
 	print("Granting pickaxe to player:", player.Name)
 
-	-- Clone the Starter Pickaxe model
-	local pickaxeModel = ReplicatedStorage:FindFirstChild("Starter Pickaxe"):Clone()
-	pickaxeModel.Name = pickaxeData.Name
-
-	-- Locate the Handle
-	local handle = pickaxeModel:FindFirstChild("Handle")
-	if not handle then
-		warn("Handle is missing in the pickaxe model!")
+	-- Clone the Starter Pickaxe Tool from ReplicatedStorage
+	local basePickaxeTool = ReplicatedStorage:FindFirstChild("Starter Pickaxe")
+	if not basePickaxeTool or basePickaxeTool.ClassName ~= "Tool" then
+		warn("Starter Pickaxe in ReplicatedStorage is missing or not a Tool!")
 		return
 	end
 
-	-- Clean up existing attributes on the handle
-	for _, child in pairs(handle:GetChildren()) do
-		if child.Name == "Durability" or child.Name == "MiningSize" or child.Name == "Rarity" then
-			child:Destroy()
-		end
-	end
+	local pickaxeTool = basePickaxeTool:Clone()
+	pickaxeTool.Name = pickaxeData.Name
 
-	-- Attach attributes to the pickaxe
+	-- Attach value objects to the pickaxe tool
 	local durabilityValue = Instance.new("IntValue")
 	durabilityValue.Name = "Durability"
 	durabilityValue.Value = pickaxeData.Durability
-	durabilityValue.Parent = pickaxeModel
+	durabilityValue.Parent = pickaxeTool
 
 	local miningSizeValue = Instance.new("IntValue")
 	miningSizeValue.Name = "MiningSize"
 	miningSizeValue.Value = pickaxeData.MiningSize
-	miningSizeValue.Parent = pickaxeModel
+	miningSizeValue.Parent = pickaxeTool
 
 	local rarityValue = Instance.new("StringValue")
 	rarityValue.Name = "Rarity"
 	rarityValue.Value = pickaxeData.Rarity
-	rarityValue.Parent = pickaxeModel
+	rarityValue.Parent = pickaxeTool
 
-	-- Place the pickaxe in the player's backpack
-	local backpack = player:FindFirstChild("Backpack")
-	if backpack then
-		pickaxeModel.Parent = backpack
-		print("Pickaxe added to player's backpack:", player.Name)
-	else
-		warn("Player's Backpack not found:", player.Name)
+	-- Place the pickaxe in the player's Backpack, retry if necessary
+	local function equipToBackpack()
+		local backpack = player:FindFirstChild("Backpack")
+		if backpack then
+			pickaxeTool.Parent = backpack
+			print("Pickaxe added to player's backpack:", player.Name)
+		else
+			warn("Player's Backpack not found:", player.Name, "Retrying in 0.1s")
+			task.delay(0.1, function()
+				local retryBackpack = player:FindFirstChild("Backpack")
+				if retryBackpack then
+					pickaxeTool.Parent = retryBackpack
+					print("Pickaxe added to player's backpack after retry:", player.Name)
+				else
+					warn("Still no Backpack for player after retry:", player.Name)
+				end
+			end)
+		end
 	end
+
+	equipToBackpack()
 end
 
 -- Function to handle mining logic
@@ -128,6 +133,7 @@ local function mineTerrain(player, targetPosition, miningSize)
 		end
 	else
 		print(player.Name .. "'s pickaxe is broken! Mining is disabled.")
+		-- Optionally: Fire a RemoteEvent to notify the client/UI
 	end
 end
 
@@ -141,3 +147,8 @@ mineEvent.OnServerEvent:Connect(function(player, targetPosition, miningSize)
 	print("MineEvent received from player:", player.Name, "Target Position:", targetPosition, "Mining Size:", miningSize)
 	mineTerrain(player, targetPosition, miningSize)
 end)
+
+-- Export the grantPickaxeToPlayer for use in other scripts (optional)
+return {
+	grantPickaxeToPlayer = grantPickaxeToPlayer,
+}

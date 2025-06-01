@@ -90,6 +90,7 @@ local function resetTerrainAndOres()
 
 	local existingObjects = {}
 
+	-- Spawn Ores
 	for _, oreType in ipairs(oreTypes) do
 		for i = 1, maxOres do
 			if randomGenerator:NextNumber(0, 1) < oreType.frequency then
@@ -102,14 +103,37 @@ local function resetTerrainAndOres()
 		end
 	end
 
-	if randomGenerator:NextNumber(0, 1) < 0.005 then
-		local chestPosition = getRandomPosition(spawnRegion, {0, 1}, 0)
-		if isPositionValid(chestPosition, existingObjects) then
-			local chest = ItemSpawner.spawnChest(chestModel, chestPosition, chestsFolder, Players:GetPlayers()[1])
-			table.insert(existingObjects, chest)
+	-- Spawn Chests (rare, 1-3 per reset, not guaranteed)
+	local chestAttempts = 10 -- try up to 10 times to spawn rare chests
+	local chestsSpawned = 0
+	local maxChests = math.random(1, 3) -- you can tweak chance here
+	local playersList = Players:GetPlayers()
+	print("Chest spawning: maxChests =", maxChests, "chestAttempts =", chestAttempts, "players =", #playersList)
+	for i = 1, chestAttempts do
+		if chestsSpawned >= maxChests then
+			print("Max chests spawned ("..maxChests.."), breaking.")
+			break
+		end
+		local chance = randomGenerator:NextNumber(0, 1)
+		print(string.format("Chest attempt %d/%d, roll=%.3f", i, chestAttempts, chance))
+		if chance < 0.07 then -- ~7% chance per attempt
+			local chestPosition = getRandomPosition(spawnRegion, {0, 1}, 0)
+			if not isPositionValid(chestPosition, existingObjects) then
+				print("Chest position not valid, skipping this attempt.")
+			elseif #playersList == 0 then
+				print("No players in game, skipping chest spawn.")
+			else
+				local targetPlayer = playersList[math.random(1, #playersList)]
+				local chest = ItemSpawner.spawnChest(chestModel, chestPosition, chestsFolder, targetPlayer)
+				print("Spawned chest at", tostring(chestPosition), "for player", targetPlayer.Name)
+				table.insert(existingObjects, chest)
+				chestsSpawned += 1
+			end
+		else
+			print("Chest not spawned on this attempt (roll too high).")
 		end
 	end
-
+	print("Chests spawned this reset:", chestsSpawned)
 	teleportPlayersToSpawn()
 	print("Terrain and ores have been reset, and players have been teleported!")
 end

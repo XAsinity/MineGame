@@ -72,7 +72,6 @@ function ItemSpawner.spawnOre(oreType, position, oresFolder)
 	return ore
 end
 
--- Function to spawn a chest with a globally unique ID
 function ItemSpawner.spawnChest(chestTemplate, position, chestsFolder, player)
 	local chest = chestTemplate:Clone()
 	chest.Position = position
@@ -80,8 +79,8 @@ function ItemSpawner.spawnChest(chestTemplate, position, chestsFolder, player)
 	chest.Parent = chestsFolder
 
 	-- Generate and assign a globally unique ID to the chest
-	local uniqueID = ItemSpawner.generateUniqueChestID(player)
-	local chestIDValue = Instance.new("StringValue") -- Use StringValue for alphanumeric IDs
+	local uniqueID = ItemSpawner.generateUniqueChestID()
+	local chestIDValue = Instance.new("StringValue")
 	chestIDValue.Name = "UniqueID"
 	chestIDValue.Value = uniqueID
 	chestIDValue.Parent = chest
@@ -89,13 +88,11 @@ function ItemSpawner.spawnChest(chestTemplate, position, chestsFolder, player)
 	print("Spawned chest with UniqueID:", uniqueID, "at position:", chest.Position)
 
 	chest.Touched:Connect(function(hit)
-		local player = game:GetService("Players"):GetPlayerFromCharacter(hit.Parent)
+		local player = Players:GetPlayerFromCharacter(hit.Parent)
 		if player then
 			local dataFolder = player:FindFirstChild("Data")
 			local inventory = player:FindFirstChild("Inventory")
-
 			if not dataFolder or not inventory then return end
-
 			-- Ensure Chests folder in Data
 			local chestsDataFolder = dataFolder:FindFirstChild("Chests")
 			if not chestsDataFolder then
@@ -103,9 +100,7 @@ function ItemSpawner.spawnChest(chestTemplate, position, chestsFolder, player)
 				chestsDataFolder.Name = "Chests"
 				chestsDataFolder.Parent = dataFolder
 			end
-
 			local chestName = "Chest_" .. uniqueID
-
 			-- Update Data.Chests
 			local dataChest = chestsDataFolder:FindFirstChild(chestName)
 			if dataChest then
@@ -116,7 +111,6 @@ function ItemSpawner.spawnChest(chestTemplate, position, chestsFolder, player)
 				dataChest.Value = 1
 				dataChest.Parent = chestsDataFolder
 			end
-
 			-- Update Inventory (flat structure)
 			local invChest = inventory:FindFirstChild(chestName)
 			if invChest then
@@ -127,7 +121,6 @@ function ItemSpawner.spawnChest(chestTemplate, position, chestsFolder, player)
 				invChest.Value = 1
 				invChest.Parent = inventory
 			end
-
 			print(player.Name .. " collected chest with UniqueID:", uniqueID)
 			chest:Destroy()
 		end

@@ -54,7 +54,7 @@ PickaxeUtils.RarityMiningRanges = {
 
 -- Generate a unique identifier for a pickaxe
 function PickaxeUtils.generatePickaxeId(rarity, durability)
-	return rarity .. "_" .. durability .. "_" .. os.time()
+	return rarity .. "_" .. durability .. "_" .. os.time() .. "_" .. math.random(100000,999999)
 end
 
 -- Roll a random rarity
@@ -91,7 +91,6 @@ function PickaxeUtils.rollMiningSize(rarity)
 		min, max = range.overall.min, range.overall.max
 	end
 
-	-- Return rounded value for compatibility with in-game logic
 	return math.floor(math.random() * (max - min) + min + 0.5)
 end
 
@@ -101,20 +100,16 @@ function PickaxeUtils.rollDurability(rarity)
 	return math.random(range.min, range.max)
 end
 
--- Roll a random pickaxe with a unique ID
+-- Roll a random pickaxe with a unique ID, returning individual values
 function PickaxeUtils.rollPickaxe()
 	local rarity = PickaxeUtils.rollRarity()
 	local miningSize = PickaxeUtils.rollMiningSize(rarity)
 	local durability = PickaxeUtils.rollDurability(rarity)
 	local pickaxeId = PickaxeUtils.generatePickaxeId(rarity, durability)
-
-	return {
-		Name = rarity .. " Pickaxe",
-		MiningSize = miningSize,
-		Durability = durability,
-		Rarity = rarity,
-		PickaxeId = pickaxeId
-	}
+	local pickaxeName = rarity .. " Pickaxe"
+	return pickaxeName, miningSize, durability, rarity, pickaxeId
 end
+
+PickaxeUtils.getRandomPickaxe = PickaxeUtils.rollPickaxe
 
 return PickaxeUtils

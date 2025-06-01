@@ -82,7 +82,32 @@ local function normalizeOreName(oreName)
 	return oreName:sub(1, 1):upper() .. oreName:sub(2):lower()
 end
 
+-- Function to check if the player has 20 or more pickaxes
+local function hasTooManyPickaxes(player)
+	local dataFolder = player:FindFirstChild("Data")
+	if not dataFolder then
+		warn("[hasTooManyPickaxes] No Data folder found for player:", player.Name)
+		return false
+	end
+
+	local pickaxesFolder = dataFolder:FindFirstChild("Pickaxes")
+	if not pickaxesFolder then
+		print("[hasTooManyPickaxes] No Pickaxes folder found for player:", player.Name)
+		return false
+	end
+
+	local pickaxeCount = #pickaxesFolder:GetChildren()
+	print("[hasTooManyPickaxes] Player:", player.Name, "has", pickaxeCount, "pickaxes.")
+	return pickaxeCount >= 20
+end
+
 OreCollectionEvent.OnServerEvent:Connect(function(player, oreType, quantity)
+	-- Prevent chest opening if the player has too many pickaxes
+	if hasTooManyPickaxes(player) then
+		warn("[OreCollectionEvent] Player", player.Name, "cannot collect ore: Pickaxe limit reached!")
+		return
+	end
+
 	oreType = normalizeOreName(oreType) -- Normalize the ore name
 	print("[OreCollectionEvent] Triggered by player:", player.Name, "Ore Type:", oreType, "Quantity:", quantity)
 	collectOre(player, oreType, quantity)

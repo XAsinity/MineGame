@@ -15,14 +15,12 @@ local function grantPickaxeToPlayer(player, pickaxe)
 	newPickaxe.Name = pickaxe.Name .. " (" .. pickaxe.Rarity .. ")"
 
 	-- Ensure attributes are only added to the root tool, not its children
-	-- Remove any existing attributes from the tool model and its children
 	for _, child in pairs(newPickaxe:GetDescendants()) do
 		if child:IsA("IntValue") or child:IsA("StringValue") then
 			child:Destroy()
 		end
 	end
 
-	-- Assign attributes using PickaxeUtils data
 	local miningSizeValue = Instance.new("IntValue")
 	miningSizeValue.Name = "MiningSize"
 	miningSizeValue.Value = pickaxe.MiningSize
@@ -68,7 +66,6 @@ local function grantPickaxeToPlayer(player, pickaxe)
 	pickaxeDataFolder.Name = pickaxe.PickaxeId
 	pickaxeDataFolder.Parent = pickaxesFolder
 
-	-- Add pickaxe attributes to the folder
 	local durabilityData = pickaxeDataFolder:FindFirstChild("Durability") or Instance.new("IntValue")
 	durabilityData.Name = "Durability"
 	durabilityData.Value = pickaxe.Durability
@@ -94,11 +91,17 @@ if RequestRandomPickaxeEvent then
 		print("RequestRandomPickaxeEvent received from player:", player.Name)
 
 		-- Roll for a random pickaxe using PickaxeUtils
-		local randomPickaxe = PickaxeUtils.rollPickaxe()
-		print("Rolled random pickaxe for player:", player.Name, "with ID:", randomPickaxe.PickaxeId, ", MiningSize:", randomPickaxe.MiningSize, ", Rarity:", randomPickaxe.Rarity, ", and Durability:", randomPickaxe.Durability)
+		local name, miningSize, durability, rarity, pickaxeId = PickaxeUtils.rollPickaxe()
+		print("Rolled random pickaxe for player:", player.Name, "with ID:", pickaxeId, ", MiningSize:", miningSize, ", Rarity:", rarity, ", and Durability:", durability)
 
 		-- Grant the rolled pickaxe to the player
-		grantPickaxeToPlayer(player, randomPickaxe)
+		grantPickaxeToPlayer(player, {
+			Name = name,
+			MiningSize = miningSize,
+			Durability = durability,
+			Rarity = rarity,
+			PickaxeId = pickaxeId
+		})
 	end)
 else
 	warn("RequestRandomPickaxeEvent not found in ReplicatedStorage!")

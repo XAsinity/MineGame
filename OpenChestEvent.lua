@@ -1,14 +1,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local removeChestEvent = ReplicatedStorage:WaitForChild("RemoveChestEvent")
-local requestRandomPickaxeEvent = ReplicatedStorage:FindFirstChild("RequestRandomPickaxeEvent")
+local requestRandomPickaxeEvent = ReplicatedStorage:WaitForChild("RequestRandomPickaxeEvent")
+local InventoryModule = require(game:GetService("ServerScriptService"):WaitForChild("InventoryModule"))
 
--- Validate that the event exists
-if not requestRandomPickaxeEvent or not requestRandomPickaxeEvent:IsA("RemoteEvent") then
-	warn("RequestRandomPickaxeEvent does not exist or is not a RemoteEvent in ReplicatedStorage!")
-	return
-end
-
--- Table to track pending confirmations
+-- Table to track pending confirmations for this session
 local pendingConfirmations = {}
 
 -- Function to handle chest opening
@@ -26,35 +21,41 @@ local function openChest(player, chestName)
 	end
 
 	local chest = chestsFolder:FindFirstChild(chestName)
-	if chest then
+	if chest and chest:IsA("IntValue") then
 		if chest.Value > 0 then
-			-- Mark chest as pending confirmation
-			pendingConfirmations[chestName] = false
+			local confirmKey = player.UserId .. "_" .. chestName
+			pendingConfirmations[confirmKey] = false
 
 			-- Decrease chest count or remove chest
 			if chest.Value > 1 then
 				chest.Value -= 1
-				removeChestEvent:FireClient(player, chestName, false) -- Notify client to decrease count
+				removeChestEvent:FireClient(player, chestName, false)
 				print(player.Name .. " opened chest: " .. chestName .. ", count decreased to: " .. chest.Value)
 			else
 				chest:Destroy()
-				removeChestEvent:FireClient(player, chestName, true) -- Notify client to remove chest
+				removeChestEvent:FireClient(player, chestName, true)
 				print(player.Name .. " opened chest: " .. chestName .. ", chest removed completely.")
+			end
+
+			-- Sync Inventory to reflect removal for UI/logic
+			if InventoryModule and InventoryModule.syncInventoryWithData then
+				InventoryModule.syncInventoryWithData(player)
 			end
 
 			-- Wait for confirmation
 			local startTime = os.clock()
-			while not pendingConfirmations[chestName] do
-				task.wait(0.1) -- Wait briefly
-				if os.clock() - startTime > 5 then -- Timeout after 5 seconds
+			while not pendingConfirmations[confirmKey] do
+				task.wait(0.1)
+				if os.clock() - startTime > 5 then
 					warn("Chest confirmation timeout for player: " .. player.Name .. ", chest: " .. chestName)
-					return -- Do not proceed with the pickaxe event
+					return
 				end
 			end
+			pendingConfirmations[confirmKey] = nil
 
-			-- Fire pickaxe event only if confirmation was received
-			requestRandomPickaxeEvent:FireClient(player, chestName)
-			print("Pickaxe event fired for player: " .. player.Name .. " after chest confirmation.")
+			-- Now, just fire the event to the client to show animation/trigger pickaxe grant
+			requestRandomPickaxeEvent:FireClient(player)
+			print("[DEBUG] RequestRandomPickaxeEvent fired to client for player: " .. player.Name)
 		else
 			warn("Chest does not exist or has zero quantity for player:", player.Name)
 		end
@@ -63,11 +64,10 @@ local function openChest(player, chestName)
 	end
 end
 
--- Listen for OpenChestEvent
 ReplicatedStorage:WaitForChild("OpenChestEvent").OnServerEvent:Connect(openChest)
 
--- Listen for RemoveChestEvent confirmation from client
 removeChestEvent.OnServerEvent:Connect(function(player, chestName)
+	local confirmKey = player.UserId .. "_" .. chestName
 	print("Confirmation received for chest removal: " .. chestName .. " from player: " .. player.Name)
-	pendingConfirmations[chestName] = true
+	pendingConfirmations[confirmKey] = true
 end)
