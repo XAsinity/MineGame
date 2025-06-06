@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local removeChestEvent = ReplicatedStorage:WaitForChild("RemoveChestEvent")
 local requestRandomPickaxeEvent = ReplicatedStorage:WaitForChild("RequestRandomPickaxeEvent")
+local inventoryUpdateEvent = ReplicatedStorage:WaitForChild("InventoryUpdateEvent") -- Added this line
 local InventoryModule = require(game:GetService("ServerScriptService"):WaitForChild("InventoryModule"))
 
 -- Table to track pending confirmations for this session
@@ -41,6 +42,9 @@ local function openChest(player, chestName)
 			if InventoryModule and InventoryModule.syncInventoryWithData then
 				InventoryModule.syncInventoryWithData(player)
 			end
+
+			-- **NEW: Fire UI update for inventory panel**
+			inventoryUpdateEvent:FireClient(player)
 
 			-- Wait for confirmation
 			local startTime = os.clock()

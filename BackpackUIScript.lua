@@ -1,8 +1,9 @@
--- BackpackUIScript.lua - robust UI update using server confirmation for pickaxe sells, with pickaxe inventory debug
-
+-- BackpackUIScript.lua
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
+local inventoryUpdateEvent = ReplicatedStorage:WaitForChild("InventoryUpdateEvent")
+local sellPickaxeEvent = ReplicatedStorage:WaitForChild("SellPickaxeEvent")
 
 local playerGui = player:WaitForChild("PlayerGui")
 local inventoryGui = playerGui:WaitForChild("InventoryGui")
@@ -77,13 +78,14 @@ local ores = {
 	},
 }
 
--- Remote Events
+-- Remote Events (other events for completeness)
 local openChestEvent = ReplicatedStorage:WaitForChild("OpenChestEvent")
 local requestRandomPickaxeEvent = ReplicatedStorage:WaitForChild("RequestRandomPickaxeEvent")
 local removeChestEvent = ReplicatedStorage:WaitForChild("RemoveChestEvent")
-local sellPickaxeEvent = ReplicatedStorage:WaitForChild("SellPickaxeEvent")
 
 -- Utility functions
+
+local chestValueConnections = {}
 
 local function clearChestSlots()
 	for _, slot in ipairs(chestSlots) do
@@ -96,17 +98,26 @@ local function clearChestSlots()
 	end
 end
 
-local function updateChestSlots()
+function updateChestSlots()
 	print("DEBUG: updateChestSlots called")
 	clearChestSlots()
-	selectedChest = nil
+
+	-- Disconnect any old value listeners
+	for _, conn in pairs(chestValueConnections) do
+		if conn.Connected then
+			conn:Disconnect()
+		end
+	end
+	chestValueConnections = {}
+
 	local dataFolder = player:FindFirstChild("Data")
+	local stillExists = false
 	if dataFolder then
 		local chestsFolder = dataFolder:FindFirstChild("Chests")
 		if chestsFolder then
 			local chestIndex = 1
 			for _, chest in ipairs(chestsFolder:GetChildren()) do
-				print("DEBUG: Chest found in folder:", chest.Name)
+				-- Show ALL chest types, including Shop_Chest
 				if chest:IsA("IntValue") and chestIndex <= #chestSlots then
 					local slot = chestSlots[chestIndex]
 					slot.Visible = true
@@ -116,10 +127,18 @@ local function updateChestSlots()
 					if textLabel then
 						textLabel.Text = chest.Name .. " x" .. chest.Value
 					end
+					if selectedChest == chest.Name then
+						stillExists = true
+					end
+					print("DEBUG: Connecting .Changed listener for chest", chest.Name)
+					local conn = chest.Changed:Connect(function()
+						print("DEBUG: Chest value changed for", chest.Name, "new value:", chest.Value)
+						updateChestSlots()
+					end)
+					table.insert(chestValueConnections, conn)
 					chestIndex += 1
 				end
 			end
-			-- Defensive clear
 			for i = chestIndex, #chestSlots do
 				local slot = chestSlots[i]
 				slot.Visible = false
@@ -130,11 +149,11 @@ local function updateChestSlots()
 				end
 				print("DEBUG: Forcibly cleared chest slot", i)
 			end
-		else
-			print("No Chests folder found in player data.")
 		end
-	else
-		print("No Data folder found for player.")
+	end
+	if not stillExists then
+		selectedChest = nil
+		print("DEBUG: selectedChest cleared as it no longer exists.")
 	end
 end
 
@@ -171,22 +190,50 @@ local function clearPickaxeSlots()
 	end
 end
 
-local function updatePickaxeSlots()
-	print("DEBUG: updatePickaxeSlots called")
+-- Live folder listeners for pickaxes
+local pickaxeFolderConnAdd, pickaxeFolderConnRem
 
-	-- Wait for Inventory and Pickaxes folder to exist
+local function connectPickaxeListeners()
 	local inventory = player:FindFirstChild("Inventory")
+	if not inventory then return end
+	local pickaxesFolder = inventory:FindFirstChild("Pickaxes")
+	if not pickaxesFolder then return end
+
+	-- Disconnect previous listeners if they exist
+	if pickaxeFolderConnAdd then pickaxeFolderConnAdd:Disconnect() end
+	if pickaxeFolderConnRem then pickaxeFolderConnRem:Disconnect() end
+
+	pickaxeFolderConnAdd = pickaxesFolder.ChildAdded:Connect(function()
+		print("[CLIENT] Pickaxe added - refreshing slots")
+		updatePickaxeSlots()
+	end)
+	pickaxeFolderConnRem = pickaxesFolder.ChildRemoved:Connect(function()
+		print("[CLIENT] Pickaxe removed - refreshing slots")
+		updatePickaxeSlots()
+	end)
+end
+
+function updatePickaxeSlots()
+	print("[CLIENT] updatePickaxeSlots called at", os.time())
+	local inventory = player:FindFirstChild("Inventory")
+	local stillExists = false
 	if not inventory then
 		print("DEBUG: No Inventory folder found for player.")
+		clearPickaxeSlots()
+		selectedPickaxe = nil
 		return
 	end
 	local pickaxesFolder = inventory:FindFirstChild("Pickaxes")
 	if not pickaxesFolder then
 		print("DEBUG: Pickaxes folder not found in inventory.")
+		clearPickaxeSlots()
+		selectedPickaxe = nil
 		return
 	end
 
-	-- Debug print of all pickaxe folders
+	-- (Re)connect listeners each refresh
+	connectPickaxeListeners()
+
 	local pickaxeChildren = pickaxesFolder:GetChildren()
 	print("DEBUG: PickaxesFolder has", #pickaxeChildren, "children")
 	for idx, pickaxe in ipairs(pickaxeChildren) do
@@ -194,7 +241,6 @@ local function updatePickaxeSlots()
 	end
 
 	clearPickaxeSlots()
-	selectedPickaxe = nil
 
 	local pickaxeIndex = 1
 	for _, pickaxe in ipairs(pickaxeChildren) do
@@ -208,10 +254,12 @@ local function updatePickaxeSlots()
 			local rarity = pickaxe:FindFirstChild("Rarity") and pickaxe.Rarity.Value or "Unknown"
 			statLabel.Visible = true
 			statLabel.Text = string.format("Size: %d | Durability: %d | Rarity: %s", miningSize, durability, rarity)
+			if selectedPickaxe == pickaxe.Name then
+				stillExists = true
+			end
 			pickaxeIndex += 1
 		end
 	end
-	-- Defensive clear for any slots past the last pickaxe
 	for i = pickaxeIndex, #pickaxeSlots do
 		local slot = pickaxeSlots[i]
 		slot.Visible = false
@@ -222,6 +270,10 @@ local function updatePickaxeSlots()
 			statLabel.Visible = false
 		end
 		print("DEBUG: Forcibly cleared pickaxe slot", i)
+	end
+	if not stillExists then
+		selectedPickaxe = nil
+		print("DEBUG: selectedPickaxe cleared as it no longer exists.")
 	end
 end
 
@@ -262,8 +314,9 @@ local function sellSelectedPickaxe()
 	if selectedPickaxe then
 		print("DEBUG: Selling pickaxe", selectedPickaxe)
 		sellPickaxeEvent:FireServer(selectedPickaxe)
-		-- Do NOT updatePickaxeSlots() here; wait for server confirmation!
 		selectedPickaxe = nil
+		print("[CLIENT] Called updatePickaxeSlots after selling pickaxe")
+		updatePickaxeSlots()
 	else
 		print("No pickaxe selected to sell!")
 	end
@@ -347,12 +400,19 @@ player:WaitForChild("Data"):WaitForChild("Ores").ChildChanged:Connect(updateOreC
 player:WaitForChild("Data"):WaitForChild("Chests").ChildAdded:Connect(updateChestSlots)
 player:WaitForChild("Data"):WaitForChild("Chests").ChildRemoved:Connect(updateChestSlots)
 
--- SERVER CONFIRMATION FOR PICKAXE SELL  
-sellPickaxeEvent.OnClientEvent:Connect(function()
-	print("DEBUG: Server confirmed pickaxe sell, refreshing UI")
+-- SERVER CONFIRMATION FOR INVENTORY UPDATE (Sell, Open, etc.)
+inventoryUpdateEvent.OnClientEvent:Connect(function()
+	print("[CLIENT] InventoryUpdateEvent received!")
 	updatePickaxeSlots()
-	selectedPickaxe = nil
+	updateChestSlots()
 end)
 
 -- Defensive: always update pickaxes when showing pickaxes tab
 pickaxeTabButton.MouseButton1Click:Connect(updatePickaxeSlots)
+
+-- Diagnosis/debug: check event objects at runtime
+print("[DEBUG] ReplicatedStorage InventoryUpdateEvent is", inventoryUpdateEvent)
+print("[DEBUG] ReplicatedStorage SellPickaxeEvent is", sellPickaxeEvent)
+
+-- Initial folder listeners (after load)
+connectPickaxeListeners()

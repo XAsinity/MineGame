@@ -6,6 +6,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local removeChestEvent = ReplicatedStorage:WaitForChild("RemoveChestEvent")
 local sellPickaxeEvent = ReplicatedStorage:WaitForChild("SellPickaxeEvent") -- Event for selling pickaxes
 
+-- NEW: BindableEvent for saving world unlocks
+local saveWorldUnlockEvent = ReplicatedStorage:FindFirstChild("SaveWorldUnlockEvent")
+
 -- Wait for InventoryModule in ServerScriptService
 local InventoryModule
 local success, err = pcall(function()
@@ -18,6 +21,9 @@ end
 
 -- DataStore
 local playerDataStore = DataStoreService:GetDataStore("PlayerDataStore")
+
+-- Failproof list of all ores to track and save
+local ALL_ORE_TYPES = {"Coal", "Iron", "Copper", "Gold", "Diamonds", "Lead", "Nickel"}
 
 -- Helper function to recreate all owned pickaxes as Tools in the Backpack
 local function grantAllPickaxesToBackpack(player)
@@ -77,12 +83,13 @@ local function serializePlayerData(player)
 
 	local data = {}
 
-	-- Save ores
+	-- Save ores (always include ALL_ORE_TYPES, defaulting to 0 if not present)
 	local oresFolder = dataFolder:FindFirstChild("Ores")
+	data.ores = {}
 	if oresFolder then
-		data.ores = {}
-		for _, oreValue in pairs(oresFolder:GetChildren()) do
-			data.ores[oreValue.Name] = oreValue.Value
+		for _, oreName in ipairs(ALL_ORE_TYPES) do
+			local oreValue = oresFolder:FindFirstChild(oreName)
+			data.ores[oreName] = oreValue and oreValue.Value or 0
 		end
 		print("Serialized Ores for", player.Name, ":", data.ores)
 	else
@@ -119,15 +126,23 @@ local function serializePlayerData(player)
 			if count >= 20 then break end
 			table.insert(data.pickaxes, {
 				Name = pickaxe.Name,
-				MiningSize = pickaxe:FindFirstChild("MiningSize") and pickaxe.MiningSize.Value or 0,
-				Durability = pickaxe:FindFirstChild("Durability") and pickaxe.Durability.Value or 0,
-				Rarity = pickaxe:FindFirstChild("Rarity") and pickaxe.Rarity.Value or "Unknown"
+				MiningSize = pickaxe:FindFirstChild("MiningSize") and pickaxe:FindFirstChild("MiningSize").Value or 0,
+				Durability = pickaxe:FindFirstChild("Durability") and pickaxe:FindFirstChild("Durability").Value or 0,
+				Rarity = pickaxe:FindFirstChild("Rarity") and pickaxe:FindFirstChild("Rarity").Value or "Unknown"
 			})
 			count += 1
 		end
 		print("Serialized Pickaxes for", player.Name, ":", data.pickaxes)
 	else
 		warn("Pickaxes folder not found for player:", player.Name)
+	end
+
+	-- Save world unlocks (NEW)
+	data.unlockedWorlds = {}
+	for _, item in ipairs(dataFolder:GetChildren()) do
+		if item:IsA("BoolValue") and string.find(item.Name, "Unlocked") then
+			data.unlockedWorlds[item.Name] = item.Value
+		end
 	end
 
 	return data
@@ -148,19 +163,15 @@ local function deserializePlayerData(player, data)
 		return
 	end
 
-	-- Load ores
+	-- Load ores: always ensure ALL_ORE_TYPES exist as IntValues
 	local oresFolder = dataFolder:FindFirstChild("Ores") or Instance.new("Folder", dataFolder)
 	oresFolder.Name = "Ores"
-
-	if data.ores then
-		for oreType, value in pairs(data.ores) do
-			local oreValue = oresFolder:FindFirstChild(oreType) or Instance.new("IntValue", oresFolder)
-			oreValue.Name = oreType
-			oreValue.Value = value
-			print("Loaded Ore:", oreType, "Value:", value)
-		end
-	else
-		warn("No ores data found for player:", player.Name)
+	for _, oreName in ipairs(ALL_ORE_TYPES) do
+		local value = (data.ores and data.ores[oreName]) or 0
+		local oreValue = oresFolder:FindFirstChild(oreName) or Instance.new("IntValue", oresFolder)
+		oreValue.Name = oreName
+		oreValue.Value = value
+		print("Loaded Ore:", oreName, "Value:", value)
 	end
 
 	-- Load chests
@@ -210,6 +221,16 @@ local function deserializePlayerData(player, data)
 		end
 	else
 		warn("No pickaxes data found for player:", player.Name)
+	end
+
+	-- Load world unlocks (NEW)
+	if data.unlockedWorlds then
+		for key, value in pairs(data.unlockedWorlds) do
+			local boolVal = dataFolder:FindFirstChild(key) or Instance.new("BoolValue", dataFolder)
+			boolVal.Name = key
+			boolVal.Value = value
+			print("Loaded World Unlock:", key, "Value:", value)
+		end
 	end
 
 	-- Mark that pickaxes are ready
@@ -280,6 +301,7 @@ local function removePickaxeFromData(player, pickaxeName)
 		warn("Pickaxe not found in data:", pickaxeName)
 	end
 end
+
 removeChestEvent.OnServerEvent:Connect(function(player, chestName, removeCompletely)
 	local dataFolder = player:FindFirstChild("Data")
 	if not dataFolder then
@@ -315,11 +337,15 @@ removeChestEvent.OnServerEvent:Connect(function(player, chestName, removeComplet
 	end
 end)
 
--- Listen for SellPickaxeEvent from client
-sellPickaxeEvent.OnServerEvent:Connect(function(player, pickaxeName)
-	-- Remove pickaxe from data
-	removePickaxeFromData(player, pickaxeName)
-end)
+-- NEW: Listen for SaveWorldUnlockEvent and save data
+if saveWorldUnlockEvent and saveWorldUnlockEvent:IsA("BindableEvent") then
+	saveWorldUnlockEvent.Event:Connect(function(player, worldKey)
+		print("[SaveWorldUnlockEvent] Saving world unlock for player:", player.Name, "World:", worldKey)
+		savePlayerData(player)
+	end)
+else
+	warn("SaveWorldUnlockEvent BindableEvent not found in ReplicatedStorage!")
+end
 
 -- PlayerAdded: Load data when a player joins
 Players.PlayerAdded:Connect(function(player)

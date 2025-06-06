@@ -4,7 +4,8 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local InventoryModule = require(ServerScriptService:WaitForChild("InventoryModule"))
 
-local defaultOres = {"Gold", "Copper", "Coal", "Iron"}
+-- Full canonical list of ores
+local ALL_ORE_TYPES = {"Gold", "Copper", "Coal", "Iron", "Diamonds", "Lead", "Nickel"}
 
 -- Debug function to print all instances of a Coins value
 local function debugCoinsPlacement(player)
@@ -96,7 +97,8 @@ local function initializePlayerData(player)
 		print("Ores folder created for player:", player.Name)
 	end
 
-	for _, oreName in ipairs(defaultOres) do
+	-- Failproof: Ensure all ores exist as IntValues
+	for _, oreName in ipairs(ALL_ORE_TYPES) do
 		if not oresFolder:FindFirstChild(oreName) then
 			local oreValue = Instance.new("IntValue")
 			oreValue.Name = oreName

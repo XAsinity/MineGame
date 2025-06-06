@@ -7,6 +7,9 @@ local showSellBubbleEvent = ReplicatedStorage:FindFirstChild("ShowSellBubbleEven
 showSellBubbleEvent.Name = "ShowSellBubbleEvent"
 showSellBubbleEvent.Parent = ReplicatedStorage
 
+-- Use the oreValues lookup table from OreDefinitions for dynamic pricing!
+local oreValues = OreDefinitions.oreValues
+
 local function sellOres(player)
 	local inventory = player:FindFirstChild("Inventory")
 	if not inventory then
@@ -20,7 +23,7 @@ local function sellOres(player)
 	for _, oreItem in ipairs(inventory:GetChildren()) do
 		if validOres[oreItem.Name] then
 			local oreValue = oreItem.Value
-			local orePrice = 10
+			local orePrice = oreValues[oreItem.Name] or 10 -- fallback to 10 if somehow missing
 			totalCoins += oreValue * orePrice
 			oreItem.Value = 0
 		end

@@ -9,7 +9,9 @@ local InventoryModule = {}
 
 local validOres = OreDefinitions.validOres
 
-local DEFAULT_ORES = {"Gold", "Copper", "Coal", "Iron"}
+-- === FULL LIST OF ORES (update here if new ores are added) ===
+local ALL_ORE_TYPES = {"Gold", "Copper", "Coal", "Iron", "Diamonds", "Lead", "Nickel"}
+local DEFAULT_ORES = ALL_ORE_TYPES
 
 -- === Utility Debugging ===
 
@@ -62,7 +64,8 @@ function InventoryModule.setupPlayerInventory(player)
 		inventory.Name = "Inventory"
 		inventory.Parent = player
 
-		for _, oreName in ipairs(DEFAULT_ORES) do
+		-- Add all ores as IntValues
+		for _, oreName in ipairs(ALL_ORE_TYPES) do
 			local ore = Instance.new("IntValue")
 			ore.Name = oreName
 			ore.Value = 0
@@ -80,6 +83,16 @@ function InventoryModule.setupPlayerInventory(player)
 		print("[DEBUG] Inventory folder created for player:", player.Name)
 		debugInventory(player)
 	else
+		-- Ensure all ores exist even if inventory was created before the update
+		for _, oreName in ipairs(ALL_ORE_TYPES) do
+			if not inventory:FindFirstChild(oreName) then
+				local ore = Instance.new("IntValue")
+				ore.Name = oreName
+				ore.Value = 0
+				ore.Parent = inventory
+				print("[DEBUG] Added missing ore to Inventory:", oreName, "for player:", player.Name)
+			end
+		end
 		print("[DEBUG] Inventory already exists for player:", player.Name)
 	end
 end
@@ -322,15 +335,22 @@ function InventoryModule.syncInventoryWithData(player)
 		return
 	end
 
-	-- --- Sync Ores ---
+	-- --- Sync Ores (ALL ORES) ---
 	local oresFolder = dataFolder:FindFirstChild("Ores")
-	for _, oreName in ipairs(DEFAULT_ORES) do
+	for _, oreName in ipairs(ALL_ORE_TYPES) do
 		local dataOre = oresFolder and oresFolder:FindFirstChild(oreName)
 		local invOre = inventory:FindFirstChild(oreName)
 		if invOre and dataOre then
 			invOre.Value = dataOre.Value
 		elseif invOre then
 			invOre.Value = 0
+		elseif dataOre then
+			-- Inventory missing the ore, create it for safety
+			local newInvOre = Instance.new("IntValue")
+			newInvOre.Name = oreName
+			newInvOre.Value = dataOre.Value
+			newInvOre.Parent = inventory
+			print("[DEBUG] (sync) Added missing ore to Inventory:", oreName, "for player:", player.Name)
 		end
 	end
 

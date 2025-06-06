@@ -1,70 +1,115 @@
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local PickaxeUtils = require(ReplicatedStorage:WaitForChild("PickaxeUtils"))
 
-local equipPickaxeEvent = ReplicatedStorage:WaitForChild("EquipPickaxeEvent") -- RemoteEvent for equipping pickaxes
+-- Reference the inventory update event for UI refresh
+local inventoryUpdateEvent = ReplicatedStorage:WaitForChild("InventoryUpdateEvent")
 
--- Function to equip a pickaxe
-local function equipPickaxe(player, pickaxeName)
-	-- Locate required folders
+local function grantPickaxeToPlayer(player, pickaxe)
+	-- Fetch the Starter Pickaxe model from ReplicatedStorage
+	local starterPickaxeModel = ReplicatedStorage:FindFirstChild("Starter Pickaxe")
+	if not starterPickaxeModel then
+		warn("Starter Pickaxe model not found in ReplicatedStorage!")
+		return
+	end
+
+	-- Clone the pickaxe model
+	local newPickaxe = starterPickaxeModel:Clone()
+	newPickaxe.Name = pickaxe.Name .. " (" .. pickaxe.Rarity .. ")"
+
+	-- Ensure attributes are only added to the root tool, not its children
+	for _, child in pairs(newPickaxe:GetDescendants()) do
+		if child:IsA("IntValue") or child:IsA("StringValue") then
+			child:Destroy()
+		end
+	end
+
+	local miningSizeValue = Instance.new("IntValue")
+	miningSizeValue.Name = "MiningSize"
+	miningSizeValue.Value = pickaxe.MiningSize
+	miningSizeValue.Parent = newPickaxe
+
+	local durabilityValue = Instance.new("IntValue")
+	durabilityValue.Name = "Durability"
+	durabilityValue.Value = pickaxe.Durability
+	durabilityValue.Parent = newPickaxe
+
+	local rarityValue = Instance.new("StringValue")
+	rarityValue.Name = "Rarity"
+	rarityValue.Value = pickaxe.Rarity
+	rarityValue.Parent = newPickaxe
+
+	local pickaxeIdValue = Instance.new("StringValue")
+	pickaxeIdValue.Name = "PickaxeId"
+	pickaxeIdValue.Value = pickaxe.PickaxeId
+	pickaxeIdValue.Parent = newPickaxe
+
+	-- Place the pickaxe in the player's Backpack
+	local backpack = player:FindFirstChild("Backpack")
+	if backpack then
+		newPickaxe.Parent = backpack
+		print("Granted new pickaxe to player:", pickaxe.Name, "with ID:", pickaxe.PickaxeId, ", MiningSize:", pickaxe.MiningSize, ", Rarity:", pickaxe.Rarity, ", and Durability:", pickaxe.Durability)
+	else
+		warn("Player's Backpack not found!")
+	end
+
+	-- Add the pickaxe to the player's Data.Pickaxes folder
 	local dataFolder = player:FindFirstChild("Data")
 	if not dataFolder then
-		warn("Data folder missing for player:", player.Name)
-		return
+		dataFolder = Instance.new("Folder")
+		dataFolder.Name = "Data"
+		dataFolder.Parent = player
 	end
 
-	local pickaxeFolder = dataFolder:FindFirstChild("Pickaxes")
-	if not pickaxeFolder then
-		warn("Pickaxes folder missing in Data for player:", player.Name)
-		return
-	end
+	local pickaxesFolder = dataFolder:FindFirstChild("Pickaxes") or Instance.new("Folder")
+	pickaxesFolder.Name = "Pickaxes"
+	pickaxesFolder.Parent = dataFolder
 
-	-- Check if the pickaxe exists in the player's pickaxe inventory
-	local selectedPickaxe = pickaxeFolder:FindFirstChild(pickaxeName)
-	if not selectedPickaxe then
-		warn("Pickaxe not found in inventory:", pickaxeName)
-		return
-	end
+	local pickaxeDataFolder = pickaxesFolder:FindFirstChild(pickaxe.PickaxeId) or Instance.new("Folder")
+	pickaxeDataFolder.Name = pickaxe.PickaxeId
+	pickaxeDataFolder.Parent = pickaxesFolder
 
-	-- Check if the player already has an equipped pickaxe
-	local equippedPickaxe = dataFolder:FindFirstChild("EquippedPickaxe")
-	if not equippedPickaxe then
-		equippedPickaxe = Instance.new("StringValue")
-		equippedPickaxe.Name = "EquippedPickaxe"
-		equippedPickaxe.Parent = dataFolder
-	end
+	local durabilityData = pickaxeDataFolder:FindFirstChild("Durability") or Instance.new("IntValue")
+	durabilityData.Name = "Durability"
+	durabilityData.Value = pickaxe.Durability
+	durabilityData.Parent = pickaxeDataFolder
 
-	-- Update the equipped pickaxe value
-	equippedPickaxe.Value = pickaxeName
-	print(player.Name .. " equipped pickaxe:", pickaxeName)
+	local miningSizeData = pickaxeDataFolder:FindFirstChild("MiningSize") or Instance.new("IntValue")
+	miningSizeData.Name = "MiningSize"
+	miningSizeData.Value = pickaxe.MiningSize
+	miningSizeData.Parent = pickaxeDataFolder
 
-	-- Optional: Send feedback to the client (e.g., UI update)
-	if equipPickaxeEvent then
-		equipPickaxeEvent:FireClient(player, pickaxeName)
-	end
+	local rarityData = pickaxeDataFolder:FindFirstChild("Rarity") or Instance.new("StringValue")
+	rarityData.Name = "Rarity"
+	rarityData.Value = pickaxe.Rarity
+	rarityData.Parent = pickaxeDataFolder
+
+	print("Added pickaxe to Data.Pickaxes for player:", player.Name)
 end
 
--- Event listener for client requests to equip a pickaxe
-equipPickaxeEvent.OnServerEvent:Connect(function(player, pickaxeName)
-	if not pickaxeName then
-		warn("No pickaxe name provided by player:", player.Name)
-		return
-	end
+-- Event listener for RequestRandomPickaxeEvent
+local RequestRandomPickaxeEvent = ReplicatedStorage:FindFirstChild("RequestRandomPickaxeEvent")
+if RequestRandomPickaxeEvent then
+	RequestRandomPickaxeEvent.OnServerEvent:Connect(function(player)
+		print("RequestRandomPickaxeEvent received from player:", player.Name)
 
-	equipPickaxe(player, pickaxeName)
-end)
+		-- Roll for a random pickaxe using PickaxeUtils
+		local name, miningSize, durability, rarity, pickaxeId = PickaxeUtils.rollPickaxe()
+		print("Rolled random pickaxe for player:", player.Name, "with ID:", pickaxeId, ", MiningSize:", miningSize, ", Rarity:", rarity, ", and Durability:", durability)
 
--- Auto-equip a default pickaxe when the player's character is added
-Players.PlayerAdded:Connect(function(player)
-	player.CharacterAdded:Connect(function(character)
-		wait(1) -- Wait for the player's character to fully load
+		-- Grant the rolled pickaxe to the player
+		grantPickaxeToPlayer(player, {
+			Name = name,
+			MiningSize = miningSize,
+			Durability = durability,
+			Rarity = rarity,
+			PickaxeId = pickaxeId
+		})
 
-		-- Equip a default pickaxe (e.g., "Starter Pickaxe") if none is equipped
-		local dataFolder = player:FindFirstChild("Data")
-		if dataFolder then
-			local equippedPickaxe = dataFolder:FindFirstChild("EquippedPickaxe")
-			if not equippedPickaxe or equippedPickaxe.Value == "" then
-				equipPickaxe(player, "Starter Pickaxe") -- Replace "Starter Pickaxe" with your default pickaxe name
-			end
-		end
+		-- FIRE UI UPDATE EVENT AFTER GRANTING PICKAXE
+		inventoryUpdateEvent:FireClient(player)
+		print("[SERVER] Fired InventoryUpdateEvent for", player.Name, "after granting pickaxe")
 	end)
-end)
+else
+	warn("RequestRandomPickaxeEvent not found in ReplicatedStorage!")
+end
